@@ -186,6 +186,14 @@ func SetRelayRouter(router *gin.Engine) {
 		relaySunoRouter.GET("/fetch/:id", controller.RelayTaskFetch)
 	}
 
+	relaySearchRouter := router.Group("/v1/search")
+	relaySearchRouter.Use(middleware.RouteTag("relay"))
+	relaySearchRouter.Use(middleware.SystemPerformanceCheck())
+	relaySearchRouter.Use(middleware.TokenAuth(), middleware.Distribute())
+	{
+		relaySearchRouter.POST("", controller.RelaySearch)
+	}
+
 	relayGeminiRouter := router.Group("/v1beta")
 	relayGeminiRouter.Use(middleware.RouteTag("relay"))
 	relayGeminiRouter.Use(middleware.SystemPerformanceCheck())

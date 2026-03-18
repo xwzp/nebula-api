@@ -16,4 +16,5 @@ const (
 
 	RelayFormatTask    = "task"
 	RelayFormatMjProxy = "mj_proxy"
+	RelayFormatSearch  = "search"
 )

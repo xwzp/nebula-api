@@ -360,6 +360,8 @@ const EditChannelModal = (props) => {
   const [codexOAuthModalVisible, setCodexOAuthModalVisible] = useState(false);
   const [codexCredentialRefreshing, setCodexCredentialRefreshing] =
     useState(false);
+  const [claudeOAuthCredentialRefreshing, setClaudeOAuthCredentialRefreshing] =
+    useState(false);
   const [paramOverrideEditorVisible, setParamOverrideEditorVisible] =
     useState(false);
 
@@ -1201,6 +1203,32 @@ const EditChannelModal = (props) => {
       showError(error.message || t('刷新失败'));
     } finally {
       setCodexCredentialRefreshing(false);
+    }
+  };
+
+  const handleRefreshClaudeOAuthCredential = async () => {
+    if (!isEdit) return;
+
+    setClaudeOAuthCredentialRefreshing(true);
+    try {
+      const res = await API.post(
+        `/api/channel/${channelId}/claude-oauth/refresh`,
+        {},
+        { skipErrorHandler: true },
+      );
+      const { success, message, data } = res.data;
+      if (success) {
+        showSuccess(
+          t('凭证刷新成功') +
+            (data?.expires_at ? '\uFF0C' + t('过期时间') + ': ' + data.expires_at : ''),
+        );
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(t('刷新失败') + ': ' + error.message);
+    } finally {
+      setClaudeOAuthCredentialRefreshing(false);
     }
   };
 
@@ -2504,6 +2532,82 @@ const EditChannelModal = (props) => {
                               visible={codexOAuthModalVisible}
                               onCancel={() => setCodexOAuthModalVisible(false)}
                               onSuccess={handleCodexOAuthGenerated}
+                            />
+                          </>
+                        ) : inputs.type === 58 ? (
+                          <>
+                            <Form.TextArea
+                              field='key'
+                              label={
+                                isEdit
+                                  ? t('密钥（编辑模式下，保存的密钥不会显示）')
+                                  : t('密钥')
+                              }
+                              placeholder={t(
+                                '直接粘贴 claude setup-token 生成的 token（sk-ant-oat01-...），或 JSON 格式：\n{\n  "access_token": "...",\n  "refresh_token": "..." \n}',
+                              )}
+                              rules={
+                                isEdit
+                                  ? []
+                                  : [
+                                      {
+                                        required: true,
+                                        message: t('请输入密钥'),
+                                      },
+                                    ]
+                              }
+                              autoComplete='new-password'
+                              onChange={(value) =>
+                                handleInputChange('key', value)
+                              }
+                              extraText={
+                                <div className='flex flex-col gap-2'>
+                                  <Text type='tertiary' size='small'>
+                                    {t(
+                                      '支持直接粘贴 setup-token（sk-ant-oat01-...）或 JSON 格式（含 refresh_token 可自动刷新）',
+                                    )}
+                                  </Text>
+
+                                  <Space wrap spacing='tight'>
+                                    {isEdit && (
+                                      <Button
+                                        size='small'
+                                        type='primary'
+                                        theme='outline'
+                                        onClick={
+                                          handleRefreshClaudeOAuthCredential
+                                        }
+                                        loading={
+                                          claudeOAuthCredentialRefreshing
+                                        }
+                                      >
+                                        {t('刷新凭证')}
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size='small'
+                                      type='primary'
+                                      theme='outline'
+                                      onClick={() => formatJsonField('key')}
+                                    >
+                                      {t('格式化')}
+                                    </Button>
+                                    {isEdit && (
+                                      <Button
+                                        size='small'
+                                        type='primary'
+                                        theme='outline'
+                                        onClick={handleShow2FAModal}
+                                      >
+                                        {t('查看密钥')}
+                                      </Button>
+                                    )}
+                                    {batchExtra}
+                                  </Space>
+                                </div>
+                              }
+                              autosize
+                              showClear
                             />
                           </>
                         ) : inputs.type === 41 &&

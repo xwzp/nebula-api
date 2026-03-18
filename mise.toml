@@ -1,0 +1,46 @@
+[tasks.dev-up]
+description = "Build and start all services (local image)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build"
+
+[tasks.dev-rebuild]
+description = "Rebuild and restart only new-api (keeps DB/Redis)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build new-api"
+
+[tasks.dev-logs]
+description = "Follow new-api container logs"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f new-api"
+
+[tasks.dev-down]
+description = "Stop all services"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml down"
+
+[tasks.dev-reset]
+description = "Stop all services and delete volumes (DB data lost)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v"
+
+[tasks.build]
+description = "Build Go binary"
+run = "go build -o new-api"
+
+[tasks.run]
+description = "Run backend dev server"
+run = "go run main.go"
+
+[tasks.test]
+description = "Run all Go tests"
+run = "go test ./..."
+
+[tasks.fe-dev]
+description = "Start frontend dev server"
+dir = "web"
+run = "bun run dev"
+
+[tasks.fe-build]
+description = "Build frontend for production"
+dir = "web"
+run = "bun install && bun run build"
+
+[tasks.fe-lint]
+description = "Lint frontend code"
+dir = "web"
+run = "bun run lint"

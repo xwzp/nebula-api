@@ -1,4 +1,6 @@
-# CLAUDE.md — Project Conventions for new-api
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Overview
 
@@ -13,19 +15,89 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 - **Auth**: JWT, WebAuthn/Passkeys, OAuth (GitHub, Discord, OIDC, etc.)
 - **Frontend package manager**: Bun (preferred over npm/yarn/pnpm)
 
+## Build & Development Commands
+
+### Backend
+
+```bash
+go run main.go                    # Run dev server (default port 3000)
+go run main.go --port 8080        # Custom port
+go run main.go --log-dir ./logs   # Custom log directory
+go build -o new-api               # Build binary
+go test ./...                     # Run all tests
+go test ./controller/             # Run tests in a specific package
+```
+
+Production build with version:
+```bash
+go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=v1.0.0'" -o new-api
+```
+
+### Frontend (in `web/` directory)
+
+```bash
+bun install          # Install dependencies
+bun run dev          # Dev server (localhost:5173, proxies API to localhost:3000)
+bun run build        # Production build → web/dist/
+bun run lint         # Check formatting (Prettier)
+bun run lint:fix     # Fix formatting
+bun run eslint       # Run ESLint
+bun run eslint:fix   # Fix ESLint issues
+```
+
+### Full Stack
+
+```bash
+make all              # Build frontend + start backend
+make build-frontend   # Build frontend only
+make start-backend    # Start backend in background
+```
+
+### Docker
+
+```bash
+docker-compose up -d    # Start app + PostgreSQL + Redis
+docker-compose down     # Stop all
+```
+
+### i18n
+
+```bash
+# Frontend (in web/)
+bun run i18n:extract   # Extract new translation strings
+bun run i18n:sync      # Sync translations across locales
+bun run i18n:lint      # Lint i18n files
+```
+
+### Key Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Server listen port |
+| `SQL_DSN` | (none) | MySQL/PostgreSQL connection string |
+| `SQLITE_PATH` | `./sqlite.db` | SQLite file path (used when no SQL_DSN) |
+| `REDIS_CONN_STRING` | (none) | Redis connection string |
+| `GIN_MODE` | `debug` | Set to `release` for production |
+| `MEMORY_CACHE_ENABLED` | (false) | Enable in-memory cache |
+| `SESSION_SECRET` | (random) | Required for multi-node deployments |
+
+See `.env.example` for the full list.
+
 ## Architecture
 
-Layered architecture: Router -> Controller -> Service -> Model
+Layered architecture: Router → Middleware → Controller → Service → Model
 
 ```
 router/        — HTTP routing (API, relay, dashboard, web)
 controller/    — Request handlers
-service/       — Business logic
+service/       — Business logic (billing, quota, error handling)
 model/         — Data models and DB access (GORM)
-relay/         — AI API relay/proxy with provider adapters
-  relay/channel/ — Provider-specific adapters (openai/, claude/, gemini/, aws/, etc.)
+relay/         — AI API relay/proxy core
+  relay/channel/   — Provider adapters (openai/, claude/, gemini/, aws/, etc.)
+  relay/common/    — RelayInfo, shared relay types
+  relay/constant/  — Relay modes (chat, embedding, image, audio, rerank, responses)
 middleware/    — Auth, rate limiting, CORS, logging, distribution
-setting/       — Configuration management (ratio, model, operation, system, performance)
+setting/       — Configuration subsystems (ratio, model, operation, system, performance)
 common/        — Shared utilities (JSON, crypto, Redis, env, rate-limit, etc.)
 dto/           — Data transfer objects (request/response structs)
 constant/      — Constants (API types, channel types, context keys)
@@ -34,14 +106,55 @@ i18n/          — Backend internationalization (go-i18n, en/zh)
 oauth/         — OAuth provider implementations
 pkg/           — Internal packages (cachex, ionet)
 web/           — React frontend
-  web/src/i18n/  — Frontend internationalization (i18next, zh/en/fr/ru/ja/vi)
 ```
+
+### Relay System — Request Flow
+
+The relay system proxies client requests to 40+ upstream AI providers. Each provider implements the `Adaptor` interface (`relay/channel/adapter.go`):
+
+```
+Client Request
+  → Router (relay-router.go)
+  → Middleware: TokenAuth → Distribute (selects channel) → RateLimit
+  → Controller.Relay(c, relayFormat)
+  → Helper (TextHelper / ImageHelper / AudioHelper / etc.)
+      → GetAdaptor(apiType) — factory returns provider-specific adapter
+      → adaptor.ConvertOpenAIRequest() — convert to provider format
+      → service.PreConsumeBilling() — pre-charge quota
+      → adaptor.DoRequest() — HTTP call to upstream
+      → adaptor.DoResponse() — parse response, extract usage
+      → service.SettleBilling() — adjust quota based on actual usage
+  → Response to client
+```
+
+**Key interfaces** (`relay/channel/adapter.go`):
+- `Adaptor` — synchronous requests (chat, embedding, image, audio, rerank)
+- `TaskAdaptor` — async tasks (video/music generation) with polling and three-phase billing (estimate → submit → complete)
+
+**Channel distribution** (`middleware/distributor.go`): Selects the best channel for a request based on model availability, channel priority, user group, and affinity. Supports cross-group retry with "auto" group.
+
+### Billing System — Two-Phase Pattern
+
+1. **Pre-consume** (`service.PreConsumeBilling`): Estimate quota cost and deduct upfront, creating a `BillingSession`
+2. **Settle** (`service.SettleBilling`): After the response, calculate actual cost from token usage. Charge the delta or refund the excess.
+
+Sources: `BillingSourceWallet` (user quota) or `BillingSourceSubscription` (recurring plan).
+
+### Context Keys
+
+Gin context (`*gin.Context`) carries request-scoped state through the middleware/handler chain. Key constants are in `constant/context_key.go` — token info, channel info, user info, original model, request timing, etc. Access via `common.SetContextKey()` / `common.GetContextKey()`.
+
+### Settings System
+
+Runtime settings stored in the `options` DB table, loaded at startup and synced periodically (`SyncOptions`). Organized into subsystems under `setting/`: ratio (pricing), model, operation, system, performance, console, reasoning.
 
 ## Internationalization (i18n)
 
 ### Backend (`i18n/`)
 - Library: `nicksnyder/go-i18n/v2`
-- Languages: en, zh
+- Languages: en, zh-CN, zh-TW
+- Message keys defined in `i18n/keys.go`
+- Usage: `i18n.T(c, i18n.MsgSomeKey, map[string]any{"Field": value})`
 
 ### Frontend (`web/src/i18n/`)
 - Library: `i18next` + `react-i18next` + `i18next-browser-languagedetector`
@@ -49,7 +162,6 @@ web/           — React frontend
 - Translation files: `web/src/i18n/locales/{lang}.json` — flat JSON, keys are Chinese source strings
 - Usage: `useTranslation()` hook, call `t('中文key')` in components
 - Semi UI locale synced via `SemiLocaleWrapper`
-- CLI tools: `bun run i18n:extract`, `bun run i18n:sync`, `bun run i18n:lint`
 
 ## Rules
 
