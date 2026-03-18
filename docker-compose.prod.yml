@@ -1,0 +1,52 @@
+# Production override — builds from local source with production settings.
+#
+# Prerequisites:
+#   Copy .env.prod.example to .env.prod and fill in your secrets.
+#
+# Usage:
+#   mise run prod-up        # or:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# Rebuild after code changes:
+#   mise run prod-rebuild   # or:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build new-api
+#
+# Logs:
+#   mise run prod-logs
+#
+# Stop:
+#   mise run prod-down
+
+services:
+  new-api:
+    image: new-api:prod
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GIN_MODE=release
+      - SQL_DSN=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_CONN_STRING=redis://redis
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TZ=Asia/Shanghai
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+    volumes:
+      - ${DATA_DIR_NEWAPI}:/data
+      - ${DATA_DIR_LOGS}:/app/logs
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ${DATA_DIR_POSTGRES}:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - ${DATA_DIR_REDIS}:/data

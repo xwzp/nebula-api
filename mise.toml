@@ -18,6 +18,64 @@ run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml down"
 description = "Stop all services and delete volumes (DB data lost)"
 run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v"
 
+# ── Production ──────────────────────────────────────────────
+
+[tasks.prod-up]
+description = "Build and start production services"
+run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build"
+
+[tasks.prod-rebuild]
+description = "Rebuild and restart only new-api in production"
+run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build new-api"
+
+[tasks.prod-logs]
+description = "Follow production new-api logs"
+run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod logs -f new-api"
+
+[tasks.prod-logs-all]
+description = "Follow all production container logs"
+run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod logs -f"
+
+[tasks.prod-down]
+description = "Stop production services"
+run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod down"
+
+[tasks.prod-status]
+description = "Show production container status"
+run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod ps"
+
+[tasks.prod-pull]
+description = "Git pull and rebuild production"
+run = "git pull origin main-plus && mise run prod-rebuild"
+
+[tasks.prod-backup]
+description = "Backup PostgreSQL database to timestamped SQL file"
+run = """
+BACKUP_DIR="${DATA_DIR:-./data}/backups"
+mkdir -p "$BACKUP_DIR"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod \
+  exec -T postgres pg_dumpall -U "${POSTGRES_USER:-newapi}" \
+  > "$BACKUP_DIR/db_$TIMESTAMP.sql"
+echo "Backup saved to $BACKUP_DIR/db_$TIMESTAMP.sql"
+ls -lh "$BACKUP_DIR/db_$TIMESTAMP.sql"
+"""
+
+[tasks.prod-restore]
+description = "Restore PostgreSQL from backup (usage: mise run prod-restore -- path/to/backup.sql)"
+run = """
+if [ -z "$1" ]; then
+  echo "Usage: mise run prod-restore -- path/to/backup.sql"
+  exit 1
+fi
+echo "Restoring from $1 ..."
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod \
+  exec -T postgres psql -U "${POSTGRES_USER:-newapi}" -d "${POSTGRES_DB:-newapi}" < "$1"
+echo "Restore complete."
+"""
+
+# ── Local development ──────────────────────────────────────
+
 [tasks.build]
 description = "Build Go binary"
 run = "go build -o new-api"
