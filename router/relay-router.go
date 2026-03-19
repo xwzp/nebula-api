@@ -194,6 +194,15 @@ func SetRelayRouter(router *gin.Engine) {
 		relaySearchRouter.POST("", controller.RelaySearch)
 	}
 
+	// Firecrawl-compatible search endpoint — proxies to Brave Search via the same channel.
+	relayFirecrawlSearchRouter := router.Group("/v2/search")
+	relayFirecrawlSearchRouter.Use(middleware.RouteTag("relay"))
+	relayFirecrawlSearchRouter.Use(middleware.SystemPerformanceCheck())
+	relayFirecrawlSearchRouter.Use(middleware.TokenAuth(), middleware.Distribute())
+	{
+		relayFirecrawlSearchRouter.POST("", controller.RelayFirecrawlSearch)
+	}
+
 	relayGeminiRouter := router.Group("/v1beta")
 	relayGeminiRouter.Use(middleware.RouteTag("relay"))
 	relayGeminiRouter.Use(middleware.SystemPerformanceCheck())

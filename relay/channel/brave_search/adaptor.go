@@ -38,6 +38,10 @@ func (a *Adaptor) ParseSearchRequest(c *gin.Context) error {
 	return nil
 }
 
+func (a *Adaptor) SetSearchRequest(req *SearchRequest) {
+	a.searchReq = req
+}
+
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if a.searchReq == nil {
 		return "", errors.New("brave search: request not parsed yet")
