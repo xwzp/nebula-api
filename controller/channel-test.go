@@ -21,6 +21,8 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay"
+	"github.com/QuantumNous/new-api/relay/channel/brave_search"
+	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -264,6 +266,11 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		}
 	}
 
+	// Brave Search: bypass LLM conversion, send a real search request directly
+	if apiType == constant.APITypeBraveSearch {
+		return testBraveSearchChannel(c, channel, info, adaptor, tik)
+	}
+
 	//// 创建一个用于日志的 info 副本，移除 ApiKey
 	//logInfo := info
 	//logInfo.ApiKey = ""
@@ -497,6 +504,57 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		Other:            other,
 	})
 	common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+	return testResult{
+		context:     c,
+		localErr:    nil,
+		newAPIError: nil,
+	}
+}
+
+func testBraveSearchChannel(c *gin.Context, channel *model.Channel, info *relaycommon.RelayInfo, adaptor relaychannel.Adaptor, tik time.Time) testResult {
+	braveAdaptor, ok := adaptor.(*brave_search.Adaptor)
+	if !ok {
+		return testResult{
+			context:  c,
+			localErr: errors.New("brave search: failed to cast adaptor"),
+		}
+	}
+
+	braveAdaptor.Init(info)
+
+	// Build a minimal search request body
+	testQuery := `{"model":"brave-search","q":"test"}`
+	c.Request.Body = io.NopCloser(bytes.NewBufferString(testQuery))
+	if err := braveAdaptor.ParseSearchRequest(c); err != nil {
+		return testResult{
+			context:  c,
+			localErr: fmt.Errorf("brave search: parse request failed: %w", err),
+		}
+	}
+
+	resp, err := braveAdaptor.DoSearchRequest(c, info)
+	if err != nil {
+		return testResult{
+			context:     c,
+			localErr:    err,
+			newAPIError: types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError),
+		}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return testResult{
+			context:     c,
+			localErr:    fmt.Errorf("brave search: upstream returned status %d: %s", resp.StatusCode, string(body)),
+			newAPIError: types.NewOpenAIError(fmt.Errorf("status %d", resp.StatusCode), types.ErrorCodeBadResponse, http.StatusInternalServerError),
+		}
+	}
+
+	tok := time.Now()
+	milliseconds := tok.Sub(tik).Milliseconds()
+	common.SysLog(fmt.Sprintf("testing brave search channel #%d, response time: %dms", channel.Id, milliseconds))
+
 	return testResult{
 		context:     c,
 		localErr:    nil,
