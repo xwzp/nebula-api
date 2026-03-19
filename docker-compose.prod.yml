@@ -9,7 +9,7 @@
 #
 # Rebuild after code changes:
 #   mise run prod-rebuild   # or:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build new-api
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build nebula-api
 #
 # Logs:
 #   mise run prod-logs
@@ -18,8 +18,8 @@
 #   mise run prod-down
 
 services:
-  new-api:
-    image: new-api:prod
+  nebula-api:
+    image: nebula-api:prod
     build:
       context: .
       dockerfile: Dockerfile

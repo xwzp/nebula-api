@@ -23,14 +23,14 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 go run main.go                    # Run dev server (default port 3000)
 go run main.go --port 8080        # Custom port
 go run main.go --log-dir ./logs   # Custom log directory
-go build -o new-api               # Build binary
+go build -o nebula-api             # Build binary
 go test ./...                     # Run all tests
 go test ./controller/             # Run tests in a specific package
 ```
 
 Production build with version:
 ```bash
-go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=v1.0.0'" -o new-api
+go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=v1.0.0'" -o nebula-api
 ```
 
 ### Frontend (in `web/` directory)
