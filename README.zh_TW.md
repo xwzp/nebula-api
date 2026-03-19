@@ -2,7 +2,7 @@
 
 ![new-api](/web/public/logo.png)
 
-# New API
+# Nebula API
 
 🍥 **新一代大模型網關與AI資產管理系統**
 

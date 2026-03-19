@@ -3,12 +3,12 @@ description = "Build and start all services (local image)"
 run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build"
 
 [tasks.dev-rebuild]
-description = "Rebuild and restart only new-api (keeps DB/Redis)"
-run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build new-api"
+description = "Rebuild and restart only nebula-api (keeps DB/Redis)"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build nebula-api"
 
 [tasks.dev-logs]
-description = "Follow new-api container logs"
-run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f new-api"
+description = "Follow nebula-api container logs"
+run = "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f nebula-api"
 
 [tasks.dev-down]
 description = "Stop all services"
@@ -25,12 +25,12 @@ description = "Build and start production services"
 run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build"
 
 [tasks.prod-rebuild]
-description = "Rebuild and restart only new-api in production"
-run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build new-api"
+description = "Rebuild and restart only nebula-api in production"
+run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build nebula-api"
 
 [tasks.prod-logs]
-description = "Follow production new-api logs"
-run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod logs -f new-api"
+description = "Follow production nebula-api logs"
+run = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod logs -f nebula-api"
 
 [tasks.prod-logs-all]
 description = "Follow all production container logs"
@@ -78,7 +78,7 @@ echo "Restore complete."
 
 [tasks.build]
 description = "Build Go binary"
-run = "go build -o new-api"
+run = "go build -o nebula-api"
 
 [tasks.run]
 description = "Run backend dev server"

@@ -2,7 +2,7 @@
 
 ![new-api](/web/public/logo.png)
 
-# New API
+# Nebula API
 
 🍥 **Next-Generation LLM Gateway and AI Asset Management System**
 

@@ -4,17 +4,17 @@
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 #
 # Rebuild after code changes:
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build new-api
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build nebula-api
 #
 # Logs:
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f new-api
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f nebula-api
 #
 # Stop:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
 services:
-  new-api:
-    image: new-api:dev
+  nebula-api:
+    image: nebula-api:dev
     build:
       context: .
       dockerfile: Dockerfile
