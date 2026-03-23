@@ -1,10 +1,15 @@
 .github
 .git
 *.md
+!docs/**/*.md
+!docs/**/*.mdx
 .vscode
 .gitignore
 Makefile
-docs
 .eslintcache
 .gocache
 /web/node_modules
+/docs/node_modules
+/docs/out
+/docs/.next
+/docs/.source

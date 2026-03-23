@@ -40,12 +40,16 @@ const Navigation = ({
       const linkContent = <span>{link.text}</span>;
 
       if (link.isExternal) {
+        // Internal paths (starting with /) open in same tab
+        const isInternalPath = link.externalLink?.startsWith('/');
         return (
           <a
             key={link.itemKey}
             href={link.externalLink}
-            target='_blank'
-            rel='noopener noreferrer'
+            {...(!isInternalPath && {
+              target: '_blank',
+              rel: 'noopener noreferrer',
+            })}
             className={commonLinkClasses}
           >
             {linkContent}

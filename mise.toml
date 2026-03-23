@@ -102,3 +102,13 @@ run = "bun install && bun run build"
 description = "Lint frontend code"
 dir = "web"
 run = "bun run lint"
+
+[tasks.docs-dev]
+description = "Start docs dev server"
+dir = "docs"
+run = "bun run dev"
+
+[tasks.docs-build]
+description = "Build docs for production"
+dir = "docs"
+run = "bun install && bun run build"
