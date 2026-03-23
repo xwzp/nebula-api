@@ -20,7 +20,15 @@ export default function Layout({ children }: { children: ReactNode }) {
         <RootProvider>
           <DocsLayout
             tree={source.pageTree}
-            nav={{ title: 'Nebula API' }}
+            nav={{
+              url: '/',
+              title: (
+                <>
+                  <img src="/docs/logo.png" alt="Nebula API" style={{ height: 24 }} />
+                  <span>Nebula API</span>
+                </>
+              ),
+            }}
           >
             {children}
           </DocsLayout>

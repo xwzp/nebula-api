@@ -3,34 +3,20 @@ title: 快速开始
 description: 注册账号、获取 API Key、发送第一个请求
 ---
 
-import { ServerAddress } from '@/components/server-address';
+import { ServerAddressCurl } from '@/components/server-address';
 
 ## 1. 注册账号
 
-访问 Nebula API 首页，注册一个账号。
+访问 Nebula API 首页，<a href="/register" target="_blank">注册一个账号</a>。
 
 ## 2. 获取 API Key
 
-登录后，进入 <a href="/console/token">控制台 → 令牌管理</a>，创建一个新的 API Key。
+登录后，进入 <a href="/console/token" target="_blank">控制台 → 令牌管理</a>，创建一个新的 API Key。
 
 ## 3. 发送请求
 
-使用你的 API Key 发送请求，API 地址为：
-
-> <ServerAddress />/v1
-
 ### 示例：Chat Completions
 
-```bash
-curl https://你的域名/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-你的令牌" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [
-      {"role": "user", "content": "你好"}
-    ]
-  }'
-```
+<ServerAddressCurl />
 
 API 完全兼容 OpenAI 格式，你可以直接使用 OpenAI SDK 或任何兼容的客户端。
