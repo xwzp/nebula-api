@@ -25,7 +25,6 @@ docs/out
 docs/.next
 docs/.source
 docs/node_modules
-docs/bun.lock
 plans
 .claude
 
