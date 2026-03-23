@@ -4,6 +4,7 @@ import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { source } from '@/lib/source';
+import { NavTitle } from '@/components/nav-title';
 
 export const metadata: Metadata = {
   title: {
@@ -21,14 +22,13 @@ export default function Layout({ children }: { children: ReactNode }) {
           <DocsLayout
             tree={source.pageTree}
             nav={{
-              url: '/',
-              title: (
-                <>
-                  <img src="/docs/logo.png" alt="Nebula API" style={{ height: 24 }} />
-                  <span>Nebula API</span>
-                </>
-              ),
+              title: <NavTitle />,
             }}
+            links={[
+              { text: '首页', url: '/', external: true },
+              { text: '控制台', url: '/console', external: true },
+              { text: '关于', url: '/about', external: true },
+            ]}
           >
             {children}
           </DocsLayout>
