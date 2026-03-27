@@ -39,13 +39,22 @@ const HeaderLogo = ({
 
   return (
     <Link to='/' className='group flex items-center gap-2'>
-      <div className='relative w-8 h-8 md:w-8 md:h-8'>
-        <SkeletonWrapper loading={isLoading || !logoLoaded} type='image' />
-        <img
-          src={logo}
-          alt='logo'
-          className={`absolute inset-0 w-full h-full transition-all duration-200 group-hover:scale-110 rounded-full ${!isLoading && logoLoaded ? 'opacity-100' : 'opacity-0'}`}
-        />
+      <div
+        className='relative w-8 h-8 md:w-8 md:h-8 flex items-center justify-center transition-all duration-200 group-hover:scale-110'
+        style={{
+          borderRadius: 8,
+          background: 'linear-gradient(135deg, #ff3bff, #ec4899, #8b5cf6, #3b82f6)',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        }}
+      >
+        <svg
+          width={18}
+          height={18}
+          viewBox='0 0 24 24'
+          fill='white'
+        >
+          <path d='M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z' />
+        </svg>
       </div>
       <div className='hidden md:flex items-center gap-2'>
         <div className='flex items-center gap-2'>
@@ -55,12 +64,19 @@ const HeaderLogo = ({
             width={120}
             height={24}
           >
-            <Typography.Title
-              heading={4}
-              className='!text-lg !font-semibold !mb-0'
+            <span
+              style={{
+                background: 'linear-gradient(to right, #ff3bff, #ec4899, #8b5cf6, #3b82f6)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                fontWeight: 700,
+                fontSize: '1.125rem',
+                letterSpacing: '-0.02em',
+              }}
             >
               {systemName}
-            </Typography.Title>
+            </span>
           </SkeletonWrapper>
           {(isSelfUseMode || isDemoSiteMode) && !isLoading && (
             <Tag
