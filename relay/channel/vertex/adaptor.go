@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/reasoning"
 	"github.com/QuantumNous/new-api/types"
@@ -231,6 +232,13 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		if strings.HasPrefix(info.UpstreamModelName, "imagen") {
 			suffix = "predict"
 		}
+
+		if strings.HasPrefix(info.UpstreamModelName, "text-embedding") ||
+			strings.HasPrefix(info.UpstreamModelName, "embedding") ||
+			strings.HasPrefix(info.UpstreamModelName, "gemini-embedding") {
+			suffix = "predict"
+		}
+
 		return a.getRequestUrl(info, info.UpstreamModelName, suffix)
 	} else if a.RequestMode == RequestModeClaude {
 		if info.IsStream {
@@ -352,8 +360,34 @@ func (a *Adaptor) ConvertRerankRequest(c *gin.Context, relayMode int, request dt
 }
 
 func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.EmbeddingRequest) (any, error) {
-	//TODO implement me
-	return nil, errors.New("not implemented")
+	if request.Input == nil {
+		return nil, errors.New("input is required")
+	}
+
+	inputs := request.ParseInput()
+	if len(inputs) == 0 {
+		return nil, errors.New("input is empty")
+	}
+
+	instances := make([]VertexEmbeddingInstance, 0, len(inputs))
+	for _, input := range inputs {
+		instances = append(instances, VertexEmbeddingInstance{
+			Content: input,
+		})
+	}
+
+	vertexReq := VertexEmbeddingRequest{
+		Instances: instances,
+	}
+
+	dimensions := lo.FromPtrOr(request.Dimensions, 0)
+	if dimensions > 0 {
+		vertexReq.Parameters = &VertexEmbeddingParameters{
+			OutputDimensionality: &dimensions,
+		}
+	}
+
+	return vertexReq, nil
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
@@ -391,6 +425,11 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 				if strings.HasPrefix(info.UpstreamModelName, "imagen") {
 					return gemini.GeminiImageHandler(c, info, resp)
 				}
+				if strings.HasPrefix(info.UpstreamModelName, "text-embedding") ||
+					strings.HasPrefix(info.UpstreamModelName, "embedding") ||
+					strings.HasPrefix(info.UpstreamModelName, "gemini-embedding") {
+					return vertexEmbeddingHandler(c, info, resp)
+				}
 				return gemini.GeminiChatHandler(c, info, resp)
 			}
 		case RequestModeOpenSource:
@@ -419,4 +458,56 @@ func (a *Adaptor) GetModelList() []string {
 
 func (a *Adaptor) GetChannelName() string {
 	return ChannelName
+}
+
+// vertexEmbeddingHandler parses the Vertex AI :predict response for embedding
+// models and converts it to the OpenAI-compatible embedding response format.
+func vertexEmbeddingHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+	defer service.CloseResponseBodyGracefully(resp)
+
+	responseBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, types.NewOpenAIError(readErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	var vertexResponse VertexEmbeddingResponse
+	if jsonErr := common.Unmarshal(responseBody, &vertexResponse); jsonErr != nil {
+		return nil, types.NewOpenAIError(jsonErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	openAIResponse := dto.OpenAIEmbeddingResponse{
+		Object: "list",
+		Data:   make([]dto.OpenAIEmbeddingResponseItem, 0, len(vertexResponse.Predictions)),
+		Model:  info.UpstreamModelName,
+	}
+
+	totalTokens := 0
+	for i, prediction := range vertexResponse.Predictions {
+		openAIResponse.Data = append(openAIResponse.Data, dto.OpenAIEmbeddingResponseItem{
+			Object:    "embedding",
+			Embedding: prediction.Embeddings.Values,
+			Index:     i,
+		})
+		totalTokens += prediction.Embeddings.Statistics.TokenCount
+	}
+
+	// Use actual token count from Vertex AI response when available
+	var usage *dto.Usage
+	if totalTokens > 0 {
+		usage = &dto.Usage{
+			PromptTokens: totalTokens,
+			TotalTokens:  totalTokens,
+		}
+	} else {
+		usage = service.ResponseText2Usage(c, "", info.UpstreamModelName, info.GetEstimatePromptTokens())
+	}
+	openAIResponse.Usage = *usage
+
+	jsonResponse, jsonErr := common.Marshal(openAIResponse)
+	if jsonErr != nil {
+		return nil, types.NewOpenAIError(jsonErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+
+	service.IOCopyBytesGracefully(c, resp, jsonResponse)
+	return usage, nil
 }

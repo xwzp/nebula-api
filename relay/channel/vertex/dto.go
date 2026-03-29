@@ -23,6 +23,42 @@ type VertexAIClaudeRequest struct {
 	//Metadata         json.RawMessage     `json:"metadata,omitempty"`
 }
 
+// Vertex AI Embedding types — used with the :predict endpoint
+// https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/text-embeddings-api
+
+type VertexEmbeddingInstance struct {
+	Content  string `json:"content"`
+	TaskType string `json:"task_type,omitempty"`
+}
+
+type VertexEmbeddingParameters struct {
+	AutoTruncate         *bool `json:"autoTruncate,omitempty"`
+	OutputDimensionality *int  `json:"outputDimensionality,omitempty"`
+}
+
+type VertexEmbeddingRequest struct {
+	Instances  []VertexEmbeddingInstance  `json:"instances"`
+	Parameters *VertexEmbeddingParameters `json:"parameters,omitempty"`
+}
+
+type VertexEmbeddingStatistics struct {
+	Truncated  bool `json:"truncated"`
+	TokenCount int  `json:"token_count"`
+}
+
+type VertexEmbeddingValues struct {
+	Values     []float64                 `json:"values"`
+	Statistics VertexEmbeddingStatistics `json:"statistics"`
+}
+
+type VertexEmbeddingPrediction struct {
+	Embeddings VertexEmbeddingValues `json:"embeddings"`
+}
+
+type VertexEmbeddingResponse struct {
+	Predictions []VertexEmbeddingPrediction `json:"predictions"`
+}
+
 func copyRequest(req *dto.ClaudeRequest, version string) *VertexAIClaudeRequest {
 	return &VertexAIClaudeRequest{
 		AnthropicVersion: version,
