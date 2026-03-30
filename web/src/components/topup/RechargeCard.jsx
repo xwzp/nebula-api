@@ -90,6 +90,8 @@ const RechargeCard = ({
   enableWaffoTopUp,
   waffoTopUp,
   waffoPayMethods,
+  enableWechatTopUp,
+  wechatTopUp,
   subscriptionLoading = false,
   subscriptionPlans = [],
   billingPreference,
@@ -227,19 +229,19 @@ const RechargeCard = ({
           <div className='py-8 flex justify-center'>
             <Spin size='large' />
           </div>
-        ) : enableOnlineTopUp || enableStripeTopUp || enableCreemTopUp || enableWaffoTopUp ? (
+        ) : enableOnlineTopUp || enableStripeTopUp || enableCreemTopUp || enableWaffoTopUp || enableWechatTopUp ? (
           <Form
             getFormApi={(api) => (onlineFormApiRef.current = api)}
             initValues={{ topUpCount: topUpCount }}
           >
             <div className='space-y-6'>
-              {(enableOnlineTopUp || enableStripeTopUp || enableWaffoTopUp) && (
+              {(enableOnlineTopUp || enableStripeTopUp || enableWaffoTopUp || enableWechatTopUp) && (
                 <Row gutter={12}>
                   <Col xs={24} sm={24} md={24} lg={10} xl={10}>
                     <Form.InputNumber
                       field='topUpCount'
                       label={t('充值数量')}
-                      disabled={!enableOnlineTopUp && !enableStripeTopUp && !enableWaffoTopUp}
+                      disabled={!enableOnlineTopUp && !enableStripeTopUp && !enableWaffoTopUp && !enableWechatTopUp}
                       placeholder={
                         t('充值数量，最低 ') + renderQuotaWithAmount(minTopUp)
                       }
@@ -298,9 +300,11 @@ const RechargeCard = ({
                           {payMethods.filter(m => m.type !== 'waffo').map((payMethod) => {
                             const minTopupVal = Number(payMethod.min_topup) || 0;
                             const isStripe = payMethod.type === 'stripe';
+                            const isWechat = payMethod.type === 'wechat';
                             const disabled =
-                              (!enableOnlineTopUp && !isStripe) ||
+                              (!enableOnlineTopUp && !isStripe && !isWechat) ||
                               (!enableStripeTopUp && isStripe) ||
+                              (!enableWechatTopUp && isWechat) ||
                               minTopupVal > Number(topUpCount || 0);
 
                             const buttonEl = (
@@ -308,7 +312,7 @@ const RechargeCard = ({
                                 key={payMethod.type}
                                 theme='outline'
                                 type='tertiary'
-                                onClick={() => preTopUp(payMethod.type)}
+                                onClick={() => isWechat ? wechatTopUp() : preTopUp(payMethod.type)}
                                 disabled={disabled}
                                 loading={
                                   paymentLoading && payWay === payMethod.type
@@ -316,7 +320,7 @@ const RechargeCard = ({
                                 icon={
                                   payMethod.type === 'alipay' ? (
                                     <SiAlipay size={18} color='#1677FF' />
-                                  ) : payMethod.type === 'wxpay' ? (
+                                  ) : payMethod.type === 'wxpay' || payMethod.type === 'wechat' ? (
                                     <SiWechat size={18} color='#07C160' />
                                   ) : payMethod.type === 'stripe' ? (
                                     <SiStripe size={18} color='#635BFF' />
@@ -361,7 +365,7 @@ const RechargeCard = ({
                 </Row>
               )}
 
-              {(enableOnlineTopUp || enableStripeTopUp || enableWaffoTopUp) && (
+              {(enableOnlineTopUp || enableStripeTopUp || enableWaffoTopUp || enableWechatTopUp) && (
                 <Form.Slot
                   label={
                     <div className='flex items-center gap-2'>

@@ -30,6 +30,7 @@ import {
   getQuotaPerUnit,
 } from '../../helpers';
 import { Modal, Toast } from '@douyinfe/semi-ui';
+import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
@@ -75,6 +76,12 @@ const TopUp = () => {
   const [enableWaffoTopUp, setEnableWaffoTopUp] = useState(false);
   const [waffoPayMethods, setWaffoPayMethods] = useState([]);
   const [waffoMinTopUp, setWaffoMinTopUp] = useState(1);
+
+  // 微信支付 Native 相关状态
+  const [enableWechatTopUp, setEnableWechatTopUp] = useState(false);
+  const [wechatMinTopUp, setWechatMinTopUp] = useState(1);
+  const [wechatQrOpen, setWechatQrOpen] = useState(false);
+  const [wechatCodeUrl, setWechatCodeUrl] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
@@ -346,6 +353,35 @@ const TopUp = () => {
     }
   };
 
+  const wechatTopUp = async () => {
+    try {
+      if (topUpCount < wechatMinTopUp) {
+        showError(t('充值数量不能小于') + wechatMinTopUp);
+        return;
+      }
+      setPaymentLoading(true);
+      const res = await API.post('/api/user/wechat/pay', {
+        amount: parseInt(topUpCount),
+        payment_method: 'wechat',
+      });
+      if (res !== undefined) {
+        const { message, data } = res.data;
+        if (message === 'success' && data?.code_url) {
+          setWechatCodeUrl(data.code_url);
+          setWechatQrOpen(true);
+        } else {
+          showError(data || t('支付请求失败'));
+        }
+      } else {
+        showError(t('支付请求失败'));
+      }
+    } catch (e) {
+      showError(t('支付请求失败'));
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const processCreemCallback = (data) => {
     // 与 Stripe 保持一致的实现方式
     window.open(data.checkout_url, '_blank');
@@ -495,6 +531,9 @@ const TopUp = () => {
           setEnableWaffoTopUp(enableWaffoTopUp);
           setWaffoPayMethods(data.waffo_pay_methods || []);
           setWaffoMinTopUp(data.waffo_min_topup || 1);
+          const enableWechatTopUp = data.enable_wechat_topup || false;
+          setEnableWechatTopUp(enableWechatTopUp);
+          setWechatMinTopUp(data.wechat_min_topup || 1);
           setMinTopUp(minTopUpValue);
           setTopUpCount(minTopUpValue);
 
@@ -779,6 +818,26 @@ const TopUp = () => {
         )}
       </Modal>
 
+      {/* 微信支付二维码模态框 */}
+      <Modal
+        title={t('微信支付')}
+        visible={wechatQrOpen}
+        onCancel={() => setWechatQrOpen(false)}
+        footer={null}
+        centered
+        maskClosable={false}
+      >
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          <p>{t('请使用微信扫描下方二维码完成支付')}</p>
+          {wechatCodeUrl && (
+            <QRCodeSVG value={wechatCodeUrl} size={256} />
+          )}
+          <p style={{ marginTop: '16px', color: 'var(--semi-color-text-2)' }}>
+            {t('支付完成后请关闭此窗口并刷新页面')}
+          </p>
+        </div>
+      </Modal>
+
       {/* 主布局区域 */}
       <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
         <RechargeCard
@@ -791,6 +850,8 @@ const TopUp = () => {
           enableWaffoTopUp={enableWaffoTopUp}
           waffoTopUp={waffoTopUp}
           waffoPayMethods={waffoPayMethods}
+          enableWechatTopUp={enableWechatTopUp}
+          wechatTopUp={wechatTopUp}
           presetAmounts={presetAmounts}
           selectedPreset={selectedPreset}
           selectPresetAmount={selectPresetAmount}
