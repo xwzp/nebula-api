@@ -160,6 +160,52 @@ func AdminAuth() func(c *gin.Context) {
 	}
 }
 
+// WebSocketAdminAuth is a simplified admin auth middleware for WebSocket endpoints.
+// It only checks session cookies (no New-Api-User header required),
+// because browsers cannot set custom headers on WebSocket connections.
+func WebSocketAdminAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		session := sessions.Default(c)
+		role := session.Get("role")
+		status := session.Get("status")
+		username := session.Get("username")
+		id := session.Get("id")
+
+		if username == nil || role == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "未登录，WebSocket 连接需要有效的登录会话",
+			})
+			c.Abort()
+			return
+		}
+
+		if statusVal, ok := status.(int); ok && statusVal == common.UserStatusDisabled {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "用户已被封禁",
+			})
+			c.Abort()
+			return
+		}
+
+		roleVal, ok := role.(int)
+		if !ok || roleVal < common.RoleAdminUser {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "无权进行此操作，需要管理员权限",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Set("username", username)
+		c.Set("role", role)
+		c.Set("id", id)
+		c.Next()
+	}
+}
+
 func RootAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		authHelper(c, common.RoleRootUser)

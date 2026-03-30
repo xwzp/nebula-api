@@ -12,6 +12,16 @@ import (
 )
 
 func SetApiRouter(router *gin.Engine) {
+	// WebSocket routes MUST be outside the gzipped group (gzip breaks WebSocket upgrades).
+	// Uses WebSocketAdminAuth which only checks session cookies — browsers cannot set
+	// custom headers (Authorization, New-Api-User) on WebSocket connections.
+	monitorRouter := router.Group("/api/relay-monitor")
+	monitorRouter.Use(middleware.WebSocketAdminAuth())
+	{
+		monitorRouter.GET("/ws", controller.RelayMonitorWs)
+		monitorRouter.GET("/status", controller.GetRelayMonitorStatus)
+	}
+
 	apiRouter := router.Group("/api")
 	apiRouter.Use(middleware.RouteTag("api"))
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))

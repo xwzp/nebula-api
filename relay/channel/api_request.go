@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relay/monitor"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
@@ -311,6 +312,16 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 		return nil, err
 	}
 	applyHeaderOverrideToRequest(req, headerOverride)
+
+	// Stage 2: Capture outgoing upstream request for relay monitoring
+	if monitor.Hub.HasActiveSessions() {
+		capturedBody, newBody, _ := monitor.CaptureReaderBody(req.Body, monitor.DefaultMaxBodyBytes)
+		if newBody != nil {
+			req.Body = io.NopCloser(newBody)
+		}
+		monitor.CaptureUpstreamRequest(c, req, capturedBody)
+	}
+
 	resp, err := doRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
@@ -522,6 +533,15 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	}
 	if resp == nil {
 		return nil, errors.New("resp is nil")
+	}
+
+	// Stage 3: Capture upstream response for relay monitoring
+	if monitor.Hub.HasActiveSessions() {
+		capturedBody, newBody, _ := monitor.CaptureReaderBody(resp.Body, monitor.DefaultMaxBodyBytes)
+		if newBody != nil {
+			resp.Body = io.NopCloser(newBody)
+		}
+		monitor.CaptureUpstreamResponse(c, resp, capturedBody)
 	}
 
 	_ = req.Body.Close()

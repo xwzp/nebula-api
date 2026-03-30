@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/relay/monitor"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
@@ -177,6 +178,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}()
 
+	// Install CapturingResponseWriter for relay monitoring (Stage 4)
+	var monitorCapWriter *monitor.CapturingResponseWriter
+	monitorActive := monitor.Hub.HasActiveSessions()
+	if monitorActive {
+		monitorCapWriter = monitor.NewCapturingResponseWriter(c.Writer)
+		c.Writer = monitorCapWriter
+	}
+
 	retryParam := &service.RetryParam{
 		Ctx:        c,
 		TokenGroup: relayInfo.TokenGroup,
@@ -208,6 +217,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		// Stage 1: Capture client request for relay monitoring
+		if monitorActive {
+			if monitor.InitTrace(c, relayInfo, channel.Id) {
+				if bodyBytes, bsErr := bodyStorage.Bytes(); bsErr == nil {
+					monitor.CaptureClientRequest(c, bodyBytes)
+				}
+			}
+		}
+
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
 			newAPIError = relay.WssHelper(c, relayInfo)
@@ -220,6 +238,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 
 		if newAPIError == nil {
+			// Stage 4: Capture client response and broadcast trace
+			if monitorCapWriter != nil {
+				monitor.CaptureClientResponse(c, monitorCapWriter)
+				monitor.FinalizeAndBroadcast(c)
+			}
 			relayInfo.LastError = nil
 			return
 		}
