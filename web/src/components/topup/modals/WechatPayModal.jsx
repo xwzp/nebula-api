@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X } from 'lucide-react';
 import { SiWechat, SiAlipay } from 'react-icons/si';
@@ -10,6 +10,7 @@ const THEME = {
     name: '微信支付',
     scanTip: '请使用微信支付扫码完成支付',
     openTip: '请打开微信支付扫一扫',
+    mobileScanTip: '请截屏后打开微信支付扫码',
     headerStyle: { background: 'linear-gradient(to right, #22c55e, #16a34a)', color: '#ffffff' },
     borderColor: '#10b981',
     pillStyle: { backgroundColor: '#dcfce7', color: '#15803d' },
@@ -21,11 +22,19 @@ const THEME = {
     tipStyle: { backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' },
     tipTextColor: '#15803d',
     Icon: SiWechat,
+    iconBg: 'bg-green-100',
+    iconText: 'text-green-600',
+    pillBg: 'bg-green-50',
+    pillText: 'text-green-700',
+    pingColor: 'bg-green-400',
+    dotColor: 'bg-green-500',
+    linkColor: 'text-green-600',
   },
   alipay: {
     name: '支付宝',
     scanTip: '请使用支付宝扫码完成支付',
     openTip: '请打开支付宝扫一扫',
+    mobileScanTip: '请截屏后打开支付宝扫码',
     headerStyle: { background: 'linear-gradient(to right, #3b82f6, #2563eb)', color: '#ffffff' },
     borderColor: '#3b82f6',
     pillStyle: { backgroundColor: '#dbeafe', color: '#1d4ed8' },
@@ -37,6 +46,13 @@ const THEME = {
     tipStyle: { backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' },
     tipTextColor: '#1d4ed8',
     Icon: SiAlipay,
+    iconBg: 'bg-blue-100',
+    iconText: 'text-blue-600',
+    pillBg: 'bg-blue-50',
+    pillText: 'text-blue-700',
+    pingColor: 'bg-blue-400',
+    dotColor: 'bg-blue-500',
+    linkColor: 'text-blue-600',
   },
 };
 
@@ -50,12 +66,165 @@ const ScanPayModal = ({
   paymentMethod = 'wechat',
 }) => {
   const { t } = useTranslation();
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' && window.innerWidth < 640,
+  );
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   if (!visible) return null;
 
   const theme = THEME[paymentMethod] || THEME.wechat;
   const { Icon } = theme;
 
+  // Mobile Bottom Sheet Layout
+  if (isMobile) {
+    return (
+      <div className='fixed inset-0 z-[1100] flex flex-col justify-end'>
+        {/* Backdrop */}
+        <div
+          className='absolute inset-0 bg-black/60 backdrop-blur-sm'
+          onClick={onCancel}
+        />
+
+        {/* Bottom Sheet */}
+        <div
+          className='relative w-full rounded-t-[2rem] overflow-hidden flex flex-col max-h-[90vh] animate-[slideUp_0.3s_ease-out]'
+          style={{ backgroundColor: '#f9fafb' }}
+        >
+          {/* Drag handle */}
+          <div
+            className='w-full flex justify-center pt-3 pb-2 rounded-t-[2rem]'
+            style={{ backgroundColor: '#ffffff' }}
+          >
+            <div className='w-12 h-1.5 bg-gray-200 rounded-full' />
+          </div>
+
+          {/* Title + Amount area */}
+          <div
+            className='relative pb-6 px-6 rounded-b-[2rem] shadow-sm z-10'
+            style={{ backgroundColor: '#ffffff' }}
+          >
+            {/* Close button */}
+            <button
+              onClick={onCancel}
+              className='absolute right-5 top-0 p-2 rounded-full transition-colors'
+              style={{ backgroundColor: '#f9fafb', color: '#9ca3af' }}
+            >
+              <X className='w-4 h-4' />
+            </button>
+
+            {/* Brand icon + name */}
+            <div className='flex items-center justify-center gap-2'>
+              <div
+                className={`w-6 h-6 rounded-full flex items-center justify-center ${theme.iconBg} ${theme.iconText}`}
+              >
+                <Icon className='w-4 h-4' />
+              </div>
+              <span className='font-medium text-[15px] text-gray-800'>
+                {t(theme.name)}
+              </span>
+            </div>
+
+            {/* Amount display */}
+            {payMoney > 0 && (
+              <div className='mt-5 text-center'>
+                <span className='text-xs text-gray-500 font-medium'>
+                  {t('实付金额')}
+                </span>
+                <div className='text-[40px] leading-none font-bold mt-2 text-gray-900 font-mono tracking-tight'>
+                  <span className='text-2xl mr-1 font-sans'>¥</span>
+                  {payMoney.toFixed(2)}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Scrollable content area */}
+          <div
+            className='flex-1 overflow-y-auto px-5 py-6 space-y-4'
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {/* QR Code card */}
+            <div
+              className='rounded-2xl p-6 flex flex-col items-center shadow-sm'
+              style={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #f3f4f6',
+              }}
+            >
+              {codeUrl && (
+                <div
+                  className='p-1.5 rounded-2xl'
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: `3px solid ${theme.borderColor}`,
+                  }}
+                >
+                  <QRCodeSVG value={codeUrl} size={150} level='H' />
+                </div>
+              )}
+              <div
+                className={`mt-5 px-4 py-1.5 rounded-full ${theme.pillBg} ${theme.pillText}`}
+              >
+                <p className='text-xs font-medium flex items-center gap-1.5'>
+                  <span className='relative flex h-2 w-2'>
+                    <span
+                      className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${theme.pingColor}`}
+                    />
+                    <span
+                      className={`relative inline-flex rounded-full h-2 w-2 ${theme.dotColor}`}
+                    />
+                  </span>
+                  {t(theme.mobileScanTip)}
+                </p>
+              </div>
+            </div>
+
+            {/* Bill details card */}
+            {topUpCount > 0 && (
+              <div
+                className='rounded-2xl p-4 shadow-sm flex flex-col gap-3'
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #f3f4f6',
+                }}
+              >
+                <div className='flex justify-between items-center px-1'>
+                  <span className='text-gray-500 text-[13px]'>
+                    {t('到账额度')}
+                  </span>
+                  <span
+                    className='text-base font-bold font-mono'
+                    style={{ color: theme.amountTextColor }}
+                  >
+                    {renderQuotaWithAmount
+                      ? renderQuotaWithAmount(topUpCount)
+                      : topUpCount}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom tip */}
+            <div className='text-center text-[11px] text-gray-400 mt-6 pb-6 pt-2'>
+              <p>
+                {t(
+                  '支付完成后请勿关闭页面，系统将自动确认支付结果。如遇问题请联系客服。',
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop Modal Layout (unchanged)
   return (
     <div className='fixed inset-0 z-[1100] flex items-center justify-center p-4'>
       {/* Backdrop */}

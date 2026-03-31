@@ -681,6 +681,15 @@ html.dark .sbg-variant-green {
   }
 }
 
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 @keyframes sweep-shine {
   0% {
     background-position: 200% 0;
