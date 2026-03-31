@@ -93,6 +93,9 @@ const RechargeCard = ({
   enableWechatTopUp,
   wechatTopUp,
   wechatUnitPrice,
+  enableAlipayTopUp,
+  alipayTopUp,
+  alipayUnitPrice,
   subscriptionLoading = false,
   subscriptionPlans = [],
   billingPreference,
@@ -230,7 +233,7 @@ const RechargeCard = ({
           <div className='py-8 flex justify-center'>
             <Spin size='large' />
           </div>
-        ) : enableOnlineTopUp || enableStripeTopUp || enableCreemTopUp || enableWaffoTopUp || enableWechatTopUp ? (
+        ) : enableOnlineTopUp || enableStripeTopUp || enableCreemTopUp || enableWaffoTopUp || enableWechatTopUp || enableAlipayTopUp ? (
           <Form
             getFormApi={(api) => (onlineFormApiRef.current = api)}
             initValues={{ topUpCount: topUpCount }}
@@ -242,7 +245,7 @@ const RechargeCard = ({
                     <Form.InputNumber
                       field='topUpCount'
                       label={t('充值数量')}
-                      disabled={!enableOnlineTopUp && !enableStripeTopUp && !enableWaffoTopUp && !enableWechatTopUp}
+                      disabled={!enableOnlineTopUp && !enableStripeTopUp && !enableWaffoTopUp && !enableWechatTopUp && !enableAlipayTopUp}
                       placeholder={
                         t('充值数量，最低 ') + renderQuotaWithAmount(minTopUp)
                       }
@@ -302,21 +305,24 @@ const RechargeCard = ({
                             const minTopupVal = Number(payMethod.min_topup) || 0;
                             const isStripe = payMethod.type === 'stripe';
                             const isWechat = payMethod.type === 'wechat';
-                            // 微信支付按钮始终可点击（由 wechatTopUp 前端拦截），其他方式按 min_topup 禁用
+                            const isAlipay = payMethod.type === 'alipay';
+                            // 微信/支付宝按钮始终可点击（由前端拦截），其他方式按 min_topup 禁用
                             const disabled = isWechat
                               ? !enableWechatTopUp
-                              : (
-                                (!enableOnlineTopUp && !isStripe) ||
-                                (!enableStripeTopUp && isStripe) ||
-                                minTopupVal > Number(topUpCount || 0)
-                              );
+                              : isAlipay
+                                ? !enableAlipayTopUp
+                                : (
+                                  (!enableOnlineTopUp && !isStripe) ||
+                                  (!enableStripeTopUp && isStripe) ||
+                                  minTopupVal > Number(topUpCount || 0)
+                                );
 
                             const buttonEl = (
                               <Button
                                 key={payMethod.type}
                                 theme='outline'
                                 type='tertiary'
-                                onClick={() => isWechat ? wechatTopUp() : preTopUp(payMethod.type)}
+                                onClick={() => isWechat ? wechatTopUp() : isAlipay ? alipayTopUp() : preTopUp(payMethod.type)}
                                 disabled={disabled}
                                 loading={
                                   paymentLoading && payWay === payMethod.type
@@ -397,11 +403,13 @@ const RechargeCard = ({
                     {presetAmounts.map((preset, index) => {
                       const discount =
                         preset.discount || topupInfo?.discount?.[preset.value] || 1.0;
-                      // 当仅启用微信支付（无 Epay/Stripe）时，用微信单价计算
+                      // 当仅启用微信/支付宝支付（无 Epay/Stripe）时，用对应单价计算
                       const effectivePriceRatio =
                         !enableOnlineTopUp && !enableStripeTopUp && enableWechatTopUp && wechatUnitPrice > 0
                           ? wechatUnitPrice
-                          : priceRatio;
+                          : !enableOnlineTopUp && !enableStripeTopUp && !enableWechatTopUp && enableAlipayTopUp && alipayUnitPrice > 0
+                            ? alipayUnitPrice
+                            : priceRatio;
                       const topupGroupRatio = topupInfo?.topup_group_ratio || 1;
                       const originalPrice = preset.value * effectivePriceRatio * topupGroupRatio;
                       const discountedPrice = originalPrice * discount;

@@ -58,7 +58,7 @@ const PAYMENT_METHOD_MAP = {
   wechat: '微信支付',
 };
 
-const TopupHistoryModal = ({ visible, onCancel, t, onShowWechatQr }) => {
+const TopupHistoryModal = ({ visible, onCancel, t, onShowWechatQr, onShowAlipayQr }) => {
   const [loading, setLoading] = useState(false);
   const [topups, setTopups] = useState([]);
   const [total, setTotal] = useState(0);
@@ -163,12 +163,16 @@ const TopupHistoryModal = ({ visible, onCancel, t, onShowWechatQr }) => {
   };
 
   // 重新显示微信支付二维码
-  const handleShowQrCode = async (tradeNo) => {
+  const handleShowQrCode = async (tradeNo, paymentMethod) => {
     try {
       const res = await API.get(`/api/user/topup/qrcode?trade_no=${encodeURIComponent(tradeNo)}`);
       const { message, data } = res.data;
       if (message === 'success' && data?.code_url) {
-        onShowWechatQr?.(data.code_url, data.pay_money || 0);
+        if (paymentMethod === 'alipay') {
+          onShowAlipayQr?.(data.code_url, data.pay_money || 0);
+        } else {
+          onShowWechatQr?.(data.code_url, data.pay_money || 0);
+        }
       } else {
         Toast.error({ content: data || t('获取二维码失败') });
       }
@@ -303,6 +307,19 @@ const TopupHistoryModal = ({ visible, onCancel, t, onShowWechatQr }) => {
                 size='small'
                 theme='outline'
                 onClick={() => handleShowQrCode(record.trade_no)}
+              >
+                {t('付款')}
+              </Button>,
+            );
+          }
+          // 支付宝可重新显示二维码
+          if (record.payment_method === 'alipay' && onShowAlipayQr) {
+            actions.push(
+              <Button
+                key='qr'
+                size='small'
+                theme='outline'
+                onClick={() => handleShowQrCode(record.trade_no, 'alipay')}
               >
                 {t('付款')}
               </Button>,

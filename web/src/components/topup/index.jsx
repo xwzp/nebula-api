@@ -85,6 +85,14 @@ const TopUp = () => {
   const [wechatCodeUrl, setWechatCodeUrl] = useState('');
   const [wechatPayMoney, setWechatPayMoney] = useState(0);
 
+  // 支付宝当面付相关状态
+  const [enableAlipayTopUp, setEnableAlipayTopUp] = useState(false);
+  const [alipayMinTopUp, setAlipayMinTopUp] = useState(1);
+  const [alipayUnitPrice, setAlipayUnitPrice] = useState(0);
+  const [alipayQrOpen, setAlipayQrOpen] = useState(false);
+  const [alipayCodeUrl, setAlipayCodeUrl] = useState('');
+  const [alipayPayMoney, setAlipayPayMoney] = useState(0);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [payWay, setPayWay] = useState('');
@@ -386,6 +394,36 @@ const TopUp = () => {
     }
   };
 
+  const alipayTopUp = async () => {
+    try {
+      if (topUpCount < alipayMinTopUp) {
+        showError(t('充值数量不能小于') + alipayMinTopUp);
+        return;
+      }
+      setPaymentLoading(true);
+      const res = await API.post('/api/user/alipay/pay', {
+        amount: parseInt(topUpCount),
+        payment_method: 'alipay',
+      });
+      if (res !== undefined) {
+        const { message, data } = res.data;
+        if (message === 'success' && data?.code_url) {
+          setAlipayCodeUrl(data.code_url);
+          setAlipayPayMoney(data.pay_money || 0);
+          setAlipayQrOpen(true);
+        } else {
+          showError(data || t('支付请求失败'));
+        }
+      } else {
+        showError(t('支付请求失败'));
+      }
+    } catch (e) {
+      showError(t('支付请求失败'));
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const processCreemCallback = (data) => {
     // 与 Stripe 保持一致的实现方式
     window.open(data.checkout_url, '_blank');
@@ -533,6 +571,10 @@ const TopUp = () => {
           setEnableWechatTopUp(enableWechatTopUp);
           setWechatMinTopUp(data.wechat_min_topup || 1);
           setWechatUnitPrice(data.wechat_unit_price || 0);
+          const enableAlipayTopUp = data.enable_alipay_topup || false;
+          setEnableAlipayTopUp(enableAlipayTopUp);
+          setAlipayMinTopUp(data.alipay_min_topup || 1);
+          setAlipayUnitPrice(data.alipay_unit_price || 0);
           // 根据启用的支付方式确定最低充值额
           const minTopUpValue = enableOnlineTopUp
             ? data.min_topup
@@ -542,7 +584,9 @@ const TopUp = () => {
                 ? data.waffo_min_topup
                 : enableWechatTopUp
                   ? data.wechat_min_topup
-                  : 1;
+                  : enableAlipayTopUp
+                    ? data.alipay_min_topup
+                    : 1;
           setMinTopUp(minTopUpValue);
           setTopUpCount(minTopUpValue);
 
@@ -566,6 +610,8 @@ const TopUp = () => {
             getStripeAmount(minTopUpValue);
           } else if (enableWechatTopUp) {
             getWechatAmount(minTopUpValue);
+          } else if (enableAlipayTopUp) {
+            getAlipayAmount(minTopUpValue);
           }
         } catch (e) {
           setPayMethods([]);
@@ -748,6 +794,33 @@ const TopUp = () => {
     }
   };
 
+  const getAlipayAmount = async (value) => {
+    if (value === undefined) {
+      value = topUpCount;
+    }
+    setAmountLoading(true);
+    try {
+      const res = await API.post('/api/user/alipay/amount', {
+        amount: parseFloat(value),
+      });
+      if (res !== undefined) {
+        const { message, data } = res.data;
+        if (message === 'success') {
+          setAmount(parseFloat(data));
+        } else {
+          setAmount(0);
+          Toast.error({ content: '错误：' + data, id: 'getAmount' });
+        }
+      } else {
+        showError(res);
+      }
+    } catch (err) {
+      // amount fetch failed silently
+    } finally {
+      setAmountLoading(false);
+    }
+  };
+
   // 根据启用的支付方式获取对应的实付金额
   const getEffectiveAmount = async (value) => {
     if (enableOnlineTopUp) {
@@ -756,6 +829,8 @@ const TopUp = () => {
       await getStripeAmount(value);
     } else if (enableWechatTopUp) {
       await getWechatAmount(value);
+    } else if (enableAlipayTopUp) {
+      await getAlipayAmount(value);
     }
   };
 
@@ -844,6 +919,11 @@ const TopUp = () => {
           setWechatPayMoney(payMoney);
           setWechatQrOpen(true);
         }}
+        onShowAlipayQr={(codeUrl, payMoney) => {
+          setAlipayCodeUrl(codeUrl);
+          setAlipayPayMoney(payMoney);
+          setAlipayQrOpen(true);
+        }}
       />
 
       {/* Creem 充值确认模态框 */}
@@ -874,7 +954,7 @@ const TopUp = () => {
         )}
       </Modal>
 
-      {/* 扫码支付二维码模态框 */}
+      {/* 微信扫码支付二维码模态框 */}
       <ScanPayModal
         visible={wechatQrOpen}
         onCancel={() => setWechatQrOpen(false)}
@@ -883,6 +963,17 @@ const TopUp = () => {
         topUpCount={topUpCount}
         renderQuotaWithAmount={renderQuotaWithAmount}
         paymentMethod='wechat'
+      />
+
+      {/* 支付宝扫码支付二维码模态框 */}
+      <ScanPayModal
+        visible={alipayQrOpen}
+        onCancel={() => setAlipayQrOpen(false)}
+        codeUrl={alipayCodeUrl}
+        payMoney={alipayPayMoney}
+        topUpCount={topUpCount}
+        renderQuotaWithAmount={renderQuotaWithAmount}
+        paymentMethod='alipay'
       />
 
       {/* 主布局区域 */}
@@ -900,6 +991,9 @@ const TopUp = () => {
           enableWechatTopUp={enableWechatTopUp}
           wechatTopUp={wechatTopUp}
           wechatUnitPrice={wechatUnitPrice}
+          enableAlipayTopUp={enableAlipayTopUp}
+          alipayTopUp={alipayTopUp}
+          alipayUnitPrice={alipayUnitPrice}
           presetAmounts={presetAmounts}
           selectedPreset={selectedPreset}
           selectPresetAmount={selectPresetAmount}
