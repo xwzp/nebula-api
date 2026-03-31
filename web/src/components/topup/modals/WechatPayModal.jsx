@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import React, { useState, useEffect, useRef } from 'react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { X } from 'lucide-react';
 import { SiWechat, SiAlipay } from 'react-icons/si';
 import { useTranslation } from 'react-i18next';
@@ -75,6 +75,26 @@ const ScanPayModal = ({
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
+
+  // Generate QR as <img> for WeChat long-press recognition
+  const qrRef = useRef(null);
+  const [qrImgSrc, setQrImgSrc] = useState('');
+
+  useEffect(() => {
+    if (!codeUrl || !isMobile || !visible) {
+      setQrImgSrc('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (qrRef.current) {
+        const canvas = qrRef.current.querySelector('canvas');
+        if (canvas) {
+          setQrImgSrc(canvas.toDataURL('image/png'));
+        }
+      }
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [codeUrl, isMobile, visible]);
 
   if (!visible) return null;
 
@@ -158,15 +178,41 @@ const ScanPayModal = ({
               }}
             >
               {codeUrl && (
-                <div
-                  className='p-1.5 rounded-2xl'
-                  style={{
-                    backgroundColor: '#ffffff',
-                    border: `3px solid ${theme.borderColor}`,
-                  }}
-                >
-                  <QRCodeSVG value={codeUrl} size={150} level='H' />
-                </div>
+                <>
+                  {/* Hidden canvas for generating QR image */}
+                  <div
+                    ref={qrRef}
+                    aria-hidden='true'
+                    style={{
+                      position: 'absolute',
+                      left: '-9999px',
+                      top: '-9999px',
+                    }}
+                  >
+                    <QRCodeCanvas value={codeUrl} size={300} level='H' />
+                  </div>
+                  <div
+                    className='p-1.5 rounded-2xl'
+                    style={{
+                      backgroundColor: '#ffffff',
+                      border: `3px solid ${theme.borderColor}`,
+                    }}
+                  >
+                    {qrImgSrc ? (
+                      <img
+                        src={qrImgSrc}
+                        alt='Payment QR Code'
+                        style={{
+                          width: 150,
+                          height: 150,
+                          display: 'block',
+                        }}
+                      />
+                    ) : (
+                      <QRCodeSVG value={codeUrl} size={150} level='H' />
+                    )}
+                  </div>
+                </>
               )}
               <div
                 className={`mt-5 px-4 py-1.5 rounded-full ${theme.pillBg} ${theme.pillText}`}
@@ -180,9 +226,12 @@ const ScanPayModal = ({
                       className={`relative inline-flex rounded-full h-2 w-2 ${theme.dotColor}`}
                     />
                   </span>
-                  {t(theme.mobileScanTip)}
+                  {t('长按图片识别二维码')}
                 </p>
               </div>
+              <p className='text-[10px] text-gray-400 mt-2'>
+                {t(theme.mobileScanTip)}
+              </p>
             </div>
 
             {/* Bill details card */}
