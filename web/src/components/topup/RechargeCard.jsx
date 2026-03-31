@@ -92,6 +92,7 @@ const RechargeCard = ({
   waffoPayMethods,
   enableWechatTopUp,
   wechatTopUp,
+  wechatUnitPrice,
   subscriptionLoading = false,
   subscriptionPlans = [],
   billingPreference,
@@ -301,11 +302,14 @@ const RechargeCard = ({
                             const minTopupVal = Number(payMethod.min_topup) || 0;
                             const isStripe = payMethod.type === 'stripe';
                             const isWechat = payMethod.type === 'wechat';
-                            const disabled =
-                              (!enableOnlineTopUp && !isStripe && !isWechat) ||
-                              (!enableStripeTopUp && isStripe) ||
-                              (!enableWechatTopUp && isWechat) ||
-                              minTopupVal > Number(topUpCount || 0);
+                            // 微信支付按钮始终可点击（由 wechatTopUp 前端拦截），其他方式按 min_topup 禁用
+                            const disabled = isWechat
+                              ? !enableWechatTopUp
+                              : (
+                                (!enableOnlineTopUp && !isStripe) ||
+                                (!enableStripeTopUp && isStripe) ||
+                                minTopupVal > Number(topUpCount || 0)
+                              );
 
                             const buttonEl = (
                               <Button
@@ -393,7 +397,12 @@ const RechargeCard = ({
                     {presetAmounts.map((preset, index) => {
                       const discount =
                         preset.discount || topupInfo?.discount?.[preset.value] || 1.0;
-                      const originalPrice = preset.value * priceRatio;
+                      // 当仅启用微信支付（无 Epay/Stripe）时，用微信单价计算
+                      const effectivePriceRatio =
+                        !enableOnlineTopUp && !enableStripeTopUp && enableWechatTopUp && wechatUnitPrice > 0
+                          ? wechatUnitPrice
+                          : priceRatio;
+                      const originalPrice = preset.value * effectivePriceRatio;
                       const discountedPrice = originalPrice * discount;
                       const hasDiscount = discount < 1.0;
                       const actualPay = discountedPrice;

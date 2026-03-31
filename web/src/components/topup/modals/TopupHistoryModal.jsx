@@ -45,6 +45,7 @@ const STATUS_CONFIG = {
   pending: { type: 'warning', key: '待支付' },
   failed: { type: 'danger', key: '失败' },
   expired: { type: 'danger', key: '已过期' },
+  cancelled: { type: 'tertiary', key: '已取消' },
 };
 
 // 支付方式映射
@@ -57,7 +58,7 @@ const PAYMENT_METHOD_MAP = {
   wechat: '微信支付',
 };
 
-const TopupHistoryModal = ({ visible, onCancel, t }) => {
+const TopupHistoryModal = ({ visible, onCancel, t, onShowWechatQr }) => {
   const [loading, setLoading] = useState(false);
   const [topups, setTopups] = useState([]);
   const [total, setTotal] = useState(0);
@@ -135,6 +136,47 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
     });
   };
 
+  // 取消订单
+  const handleCancelOrder = async (tradeNo) => {
+    try {
+      const res = await API.post('/api/user/topup/cancel', {
+        trade_no: tradeNo,
+      });
+      const { success, message, data } = res.data;
+      if (success || message === 'success') {
+        Toast.success({ content: t('订单已取消') });
+        await loadTopups(page, pageSize);
+      } else {
+        Toast.error({ content: data || message || t('取消失败') });
+      }
+    } catch (e) {
+      Toast.error({ content: t('取消失败') });
+    }
+  };
+
+  const confirmCancelOrder = (tradeNo) => {
+    Modal.confirm({
+      title: t('确认取消'),
+      content: t('确定要取消该订单吗？'),
+      onOk: () => handleCancelOrder(tradeNo),
+    });
+  };
+
+  // 重新显示微信支付二维码
+  const handleShowQrCode = async (tradeNo) => {
+    try {
+      const res = await API.get(`/api/user/topup/qrcode?trade_no=${encodeURIComponent(tradeNo)}`);
+      const { message, data } = res.data;
+      if (message === 'success' && data?.code_url) {
+        onShowWechatQr?.(data.code_url, data.pay_money || 0);
+      } else {
+        Toast.error({ content: data || t('获取二维码失败') });
+      }
+    } catch (e) {
+      Toast.error({ content: t('获取二维码失败') });
+    }
+  };
+
   // 渲染状态徽章
   const renderStatusBadge = (status) => {
     const config = STATUS_CONFIG[status] || { type: 'primary', key: status };
@@ -168,6 +210,21 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
         key: 'trade_no',
         render: (text) => <Text copyable>{text}</Text>,
       },
+    ];
+
+    // 管理员显示用户名列
+    if (userIsAdmin) {
+      baseColumns.push({
+        title: t('用户'),
+        dataIndex: 'username',
+        key: 'username',
+        render: (username, record) => (
+          <Text>{username || `UID:${record.user_id}`}</Text>
+        ),
+      });
+    }
+
+    baseColumns.push(
       {
         title: t('支付方式'),
         dataIndex: 'payment_method',
@@ -206,39 +263,63 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
         key: 'status',
         render: renderStatusBadge,
       },
-    ];
-
-    // 管理员才显示操作列
-    if (userIsAdmin) {
-      baseColumns.push({
+      {
         title: t('操作'),
         key: 'action',
         render: (_, record) => {
+          if (record.status !== 'pending') return null;
           const actions = [];
-          if (record.status === 'pending') {
+          // 管理员补单
+          if (userIsAdmin) {
             actions.push(
               <Button
-                key="complete"
+                key='complete'
                 size='small'
                 type='primary'
                 theme='outline'
                 onClick={() => confirmAdminComplete(record.trade_no)}
               >
                 {t('补单')}
-              </Button>
+              </Button>,
             );
           }
-          return actions.length > 0 ? <>{actions}</> : null;
+          // 取消订单（用户和管理员都可）
+          actions.push(
+            <Button
+              key='cancel'
+              size='small'
+              type='danger'
+              theme='outline'
+              onClick={() => confirmCancelOrder(record.trade_no)}
+            >
+              {t('取消')}
+            </Button>,
+          );
+          // 微信支付可重新显示二维码（仅用户侧）
+          if (record.payment_method === 'wechat' && onShowWechatQr) {
+            actions.push(
+              <Button
+                key='qr'
+                size='small'
+                theme='outline'
+                onClick={() => handleShowQrCode(record.trade_no)}
+              >
+                {t('付款')}
+              </Button>,
+            );
+          }
+          return actions.length > 0 ? (
+            <div className='flex gap-1 flex-wrap'>{actions}</div>
+          ) : null;
         },
-      });
-    }
-
-    baseColumns.push({
-      title: t('创建时间'),
-      dataIndex: 'create_time',
-      key: 'create_time',
-      render: (time) => timestamp2string(time),
-    });
+      },
+      {
+        title: t('创建时间'),
+        dataIndex: 'create_time',
+        key: 'create_time',
+        render: (time) => timestamp2string(time),
+      },
+    );
 
     return baseColumns;
   }, [t, userIsAdmin]);

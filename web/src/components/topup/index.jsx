@@ -80,8 +80,10 @@ const TopUp = () => {
   // 微信支付 Native 相关状态
   const [enableWechatTopUp, setEnableWechatTopUp] = useState(false);
   const [wechatMinTopUp, setWechatMinTopUp] = useState(1);
+  const [wechatUnitPrice, setWechatUnitPrice] = useState(0);
   const [wechatQrOpen, setWechatQrOpen] = useState(false);
   const [wechatCodeUrl, setWechatCodeUrl] = useState('');
+  const [wechatPayMoney, setWechatPayMoney] = useState(0);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
@@ -368,6 +370,7 @@ const TopUp = () => {
         const { message, data } = res.data;
         if (message === 'success' && data?.code_url) {
           setWechatCodeUrl(data.code_url);
+          setWechatPayMoney(data.pay_money || 0);
           setWechatQrOpen(true);
         } else {
           showError(data || t('支付请求失败'));
@@ -517,13 +520,6 @@ const TopUp = () => {
           const enableStripeTopUp = data.enable_stripe_topup || false;
           const enableOnlineTopUp = data.enable_online_topup || false;
           const enableCreemTopUp = data.enable_creem_topup || false;
-          const minTopUpValue = enableOnlineTopUp
-            ? data.min_topup
-            : enableStripeTopUp
-              ? data.stripe_min_topup
-              : data.enable_waffo_topup
-                ? data.waffo_min_topup
-                : 1;
           setEnableOnlineTopUp(enableOnlineTopUp);
           setEnableStripeTopUp(enableStripeTopUp);
           setEnableCreemTopUp(enableCreemTopUp);
@@ -534,6 +530,17 @@ const TopUp = () => {
           const enableWechatTopUp = data.enable_wechat_topup || false;
           setEnableWechatTopUp(enableWechatTopUp);
           setWechatMinTopUp(data.wechat_min_topup || 1);
+          setWechatUnitPrice(data.wechat_unit_price || 0);
+          // 根据启用的支付方式确定最低充值额
+          const minTopUpValue = enableOnlineTopUp
+            ? data.min_topup
+            : enableStripeTopUp
+              ? data.stripe_min_topup
+              : enableWaffoTopUp
+                ? data.waffo_min_topup
+                : enableWechatTopUp
+                  ? data.wechat_min_topup
+                  : 1;
           setMinTopUp(minTopUpValue);
           setTopUpCount(minTopUpValue);
 
@@ -550,8 +557,14 @@ const TopUp = () => {
             setPresetAmounts(generatePresetAmounts(minTopUpValue));
           }
 
-          // 初始化显示实付金额
-          getAmount(minTopUpValue);
+          // 初始化显示实付金额（根据启用的支付方式调用对应的接口）
+          if (enableOnlineTopUp) {
+            getAmount(minTopUpValue);
+          } else if (enableStripeTopUp) {
+            getStripeAmount(minTopUpValue);
+          } else if (enableWechatTopUp) {
+            getWechatAmount(minTopUpValue);
+          }
         } catch (e) {
           setPayMethods([]);
         }
@@ -706,6 +719,44 @@ const TopUp = () => {
     }
   };
 
+  const getWechatAmount = async (value) => {
+    if (value === undefined) {
+      value = topUpCount;
+    }
+    setAmountLoading(true);
+    try {
+      const res = await API.post('/api/user/wechat/amount', {
+        amount: parseFloat(value),
+      });
+      if (res !== undefined) {
+        const { message, data } = res.data;
+        if (message === 'success') {
+          setAmount(parseFloat(data));
+        } else {
+          setAmount(0);
+          Toast.error({ content: '错误：' + data, id: 'getAmount' });
+        }
+      } else {
+        showError(res);
+      }
+    } catch (err) {
+      // amount fetch failed silently
+    } finally {
+      setAmountLoading(false);
+    }
+  };
+
+  // 根据启用的支付方式获取对应的实付金额
+  const getEffectiveAmount = async (value) => {
+    if (enableOnlineTopUp) {
+      await getAmount(value);
+    } else if (enableStripeTopUp) {
+      await getStripeAmount(value);
+    } else if (enableWechatTopUp) {
+      await getWechatAmount(value);
+    }
+  };
+
   const handleCancel = () => {
     setOpen(false);
   };
@@ -732,10 +783,8 @@ const TopUp = () => {
     setTopUpCount(preset.value);
     setSelectedPreset(preset.value);
 
-    // 计算实际支付金额，考虑折扣
-    const discount = preset.discount || topupInfo.discount[preset.value] || 1.0;
-    const discountedAmount = preset.value * priceRatio * discount;
-    setAmount(discountedAmount);
+    // 通过后端接口获取准确的实付金额
+    getEffectiveAmount(preset.value);
   };
 
   // 格式化大数字显示
@@ -788,6 +837,11 @@ const TopUp = () => {
         visible={openHistory}
         onCancel={handleHistoryCancel}
         t={t}
+        onShowWechatQr={(codeUrl, payMoney) => {
+          setWechatCodeUrl(codeUrl);
+          setWechatPayMoney(payMoney);
+          setWechatQrOpen(true);
+        }}
       />
 
       {/* Creem 充值确认模态框 */}
@@ -829,6 +883,11 @@ const TopUp = () => {
       >
         <div style={{ textAlign: 'center', padding: '20px' }}>
           <p>{t('请使用微信扫描下方二维码完成支付')}</p>
+          {wechatPayMoney > 0 && (
+            <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--semi-color-success)' }}>
+              {t('支付金额')}：¥{wechatPayMoney.toFixed(2)}
+            </p>
+          )}
           {wechatCodeUrl && (
             <QRCodeSVG value={wechatCodeUrl} size={256} />
           )}
@@ -852,6 +911,7 @@ const TopUp = () => {
           waffoPayMethods={waffoPayMethods}
           enableWechatTopUp={enableWechatTopUp}
           wechatTopUp={wechatTopUp}
+          wechatUnitPrice={wechatUnitPrice}
           presetAmounts={presetAmounts}
           selectedPreset={selectedPreset}
           selectPresetAmount={selectPresetAmount}
@@ -860,7 +920,7 @@ const TopUp = () => {
           topUpCount={topUpCount}
           minTopUp={minTopUp}
           renderQuotaWithAmount={renderQuotaWithAmount}
-          getAmount={getAmount}
+          getAmount={getEffectiveAmount}
           setTopUpCount={setTopUpCount}
           setSelectedPreset={setSelectedPreset}
           renderAmount={renderAmount}
