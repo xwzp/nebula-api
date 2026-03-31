@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -90,6 +91,10 @@ func getWechatPayMoney(amount int64, group string) float64 {
 
 func getWechatPayMinTopup() int64 {
 	minTopup := setting.WechatPayMinTopUp
+	// 全局 MinTopUp 作为下限，确保各网关不低于全局设定
+	if operation_setting.MinTopUp > minTopup {
+		minTopup = operation_setting.MinTopUp
+	}
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
 		dMinTopup := decimal.NewFromInt(int64(minTopup))
 		dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
@@ -121,6 +126,20 @@ func RequestWechatPay(c *gin.Context) {
 	}
 
 	id := c.GetInt("id")
+
+	// 限制每个用户的待支付订单数，防止滥用
+	const maxPendingOrders = 5
+	pendingCount, err := model.CountUserPendingTopUps(id, PaymentMethodWechat)
+	if err != nil {
+		log.Printf("微信支付查询待支付订单失败: %v", err)
+		c.JSON(200, gin.H{"message": "error", "data": "系统繁忙，请稍后重试"})
+		return
+	}
+	if pendingCount >= maxPendingOrders {
+		c.JSON(200, gin.H{"message": "error", "data": "您有太多未完成的支付订单，请先完成或等待已有订单过期后再试"})
+		return
+	}
+
 	group, err := model.GetUserGroup(id, true)
 	if err != nil {
 		c.JSON(200, gin.H{"message": "error", "data": "获取用户分组失败"})
@@ -192,12 +211,16 @@ func RequestWechatPay(c *gin.Context) {
 	description := fmt.Sprintf("充值 %d 额度", req.Amount)
 	currency := "CNY"
 
+	// 订单 15 分钟后过期，防止大量未支付订单积压
+	expireTime := time.Now().Add(15 * time.Minute)
+
 	resp, _, err := svc.Prepay(ctx, native.PrepayRequest{
 		Appid:       core.String(setting.WechatPayAppId),
 		Mchid:       core.String(setting.WechatPayMchId),
 		Description: core.String(description),
 		OutTradeNo:  core.String(tradeNo),
 		NotifyUrl:   core.String(notifyUrl),
+		TimeExpire:  &expireTime,
 		Amount: &native.Amount{
 			Total:    core.Int64(totalFen),
 			Currency: core.String(currency),
@@ -219,15 +242,45 @@ func RequestWechatPay(c *gin.Context) {
 		return
 	}
 
+	// 保存 code_url 到订单，供用户刷新页面后重新展示二维码
+	topUp.CodeUrl = *resp.CodeUrl
+	_ = topUp.Update()
+
 	log.Printf("微信支付订单创建成功 - 用户: %d, 订单: %s, 金额: %.2f CNY", id, tradeNo, payMoney)
 
 	c.JSON(200, gin.H{
 		"message": "success",
 		"data": gin.H{
-			"code_url": *resp.CodeUrl,
-			"order_id": tradeNo,
+			"code_url":  *resp.CodeUrl,
+			"order_id":  tradeNo,
+			"pay_money": payMoney,
 		},
 	})
+}
+
+// RequestWechatAmount 查询微信支付的实付金额（参照 RequestStripeAmount 模式）
+func RequestWechatAmount(c *gin.Context) {
+	var req WechatPayRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(200, gin.H{"message": "error", "data": "参数错误"})
+		return
+	}
+	if req.Amount < getWechatPayMinTopup() {
+		c.JSON(200, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", getWechatPayMinTopup())})
+		return
+	}
+	id := c.GetInt("id")
+	group, err := model.GetUserGroup(id, true)
+	if err != nil {
+		c.JSON(200, gin.H{"message": "error", "data": "获取用户分组失败"})
+		return
+	}
+	payMoney := getWechatPayMoney(req.Amount, group)
+	if payMoney <= 0.01 {
+		c.JSON(200, gin.H{"message": "error", "data": "充值金额过低"})
+		return
+	}
+	c.JSON(200, gin.H{"message": "success", "data": strconv.FormatFloat(payMoney, 'f', 2, 64)})
 }
 
 // WechatPayNotify 处理微信支付异步回调通知
@@ -294,6 +347,129 @@ func WechatPayNotify(c *gin.Context) {
 	log.Printf("微信支付回调：充值成功 - 订单: %s, 微信交易号: %s",
 		outTradeNo, safeDeref(transaction.TransactionId))
 	c.JSON(http.StatusOK, gin.H{"code": "SUCCESS", "message": "OK"})
+}
+
+// CancelTopUp 取消待支付订单（用户取消自己的，管理员取消任意）
+func CancelTopUp(c *gin.Context) {
+	var req struct {
+		TradeNo string `json:"trade_no"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.TradeNo == "" {
+		c.JSON(200, gin.H{"message": "error", "data": "参数错误"})
+		return
+	}
+
+	userId := c.GetInt("id")
+
+	LockOrder(req.TradeNo)
+	defer UnlockOrder(req.TradeNo)
+
+	// 查询订单以判断是否为微信支付订单
+	topUp := model.GetTopUpByTradeNo(req.TradeNo)
+	if topUp == nil {
+		c.JSON(200, gin.H{"message": "error", "data": "订单不存在"})
+		return
+	}
+
+	isAdminUser := c.GetInt("role") >= common.RoleAdminUser
+	if err := model.CancelTopUp(req.TradeNo, userId, isAdminUser); err != nil {
+		c.JSON(200, gin.H{"message": "error", "data": err.Error()})
+		return
+	}
+
+	// 如果是微信支付订单，同步关闭微信侧订单
+	if topUp.PaymentMethod == PaymentMethodWechat {
+		go closeWechatOrder(req.TradeNo)
+	}
+
+	log.Printf("订单取消成功 - 用户: %d, 订单: %s, 管理员: %v", userId, req.TradeNo, isAdminUser)
+	c.JSON(200, gin.H{"message": "success", "data": "订单已取消"})
+}
+
+// closeWechatOrder 调用微信支付关闭订单 API
+func closeWechatOrder(tradeNo string) {
+	ctx := context.Background()
+	client, err := getWechatPayClient(ctx)
+	if err != nil {
+		log.Printf("关闭微信订单失败（客户端初始化）: %v, 订单: %s", err, tradeNo)
+		return
+	}
+	svc := native.NativeApiService{Client: client}
+	_, err = svc.CloseOrder(ctx, native.CloseOrderRequest{
+		OutTradeNo: core.String(tradeNo),
+		Mchid:      core.String(setting.WechatPayMchId),
+	})
+	if err != nil {
+		log.Printf("关闭微信订单失败: %v, 订单: %s", err, tradeNo)
+		return
+	}
+	log.Printf("微信订单已关闭: %s", tradeNo)
+}
+
+// GetTopUpQrCode 获取待支付微信订单的二维码（用户刷新页面后重新展示）
+func GetTopUpQrCode(c *gin.Context) {
+	tradeNo := c.Query("trade_no")
+	if tradeNo == "" {
+		c.JSON(200, gin.H{"message": "error", "data": "参数错误"})
+		return
+	}
+
+	userId := c.GetInt("id")
+	topUp := model.GetTopUpByTradeNo(tradeNo)
+	if topUp == nil {
+		c.JSON(200, gin.H{"message": "error", "data": "订单不存在"})
+		return
+	}
+	if topUp.UserId != userId {
+		c.JSON(200, gin.H{"message": "error", "data": "无权操作"})
+		return
+	}
+	if topUp.Status != common.TopUpStatusPending {
+		c.JSON(200, gin.H{"message": "error", "data": "订单非待支付状态"})
+		return
+	}
+	if topUp.PaymentMethod != PaymentMethodWechat {
+		c.JSON(200, gin.H{"message": "error", "data": "仅支持微信支付订单"})
+		return
+	}
+	if topUp.CodeUrl == "" {
+		c.JSON(200, gin.H{"message": "error", "data": "二维码已失效，请重新创建订单"})
+		return
+	}
+
+	// 检查订单是否已过期（创建后 15 分钟）
+	if time.Now().Unix()-topUp.CreateTime > 15*60 {
+		c.JSON(200, gin.H{"message": "error", "data": "订单已过期，请重新创建"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "success",
+		"data": gin.H{
+			"code_url":  topUp.CodeUrl,
+			"pay_money": topUp.Money,
+			"trade_no":  topUp.TradeNo,
+		},
+	})
+}
+
+// StartTopUpExpireCleanup 启动后台定时任务，每 15 分钟清理过期的 pending 订单
+func StartTopUpExpireCleanup() {
+	for {
+		time.Sleep(15 * time.Minute)
+		expireBefore := time.Now().Add(-15 * time.Minute).Unix()
+		wechatTradeNos, err := model.ExpirePendingTopUps(expireBefore)
+		if err != nil {
+			log.Printf("清理过期订单失败: %v", err)
+			continue
+		}
+		if len(wechatTradeNos) > 0 {
+			log.Printf("已将 %d 笔过期订单标记为 expired，正在关闭微信侧订单", len(wechatTradeNos))
+			for _, tradeNo := range wechatTradeNos {
+				closeWechatOrder(tradeNo)
+			}
+		}
+	}
 }
 
 func safeDeref(s *string) string {

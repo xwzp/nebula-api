@@ -96,6 +96,9 @@ func main() {
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 
+	// 定时清理过期的充值订单
+	go controller.StartTopUpExpireCleanup()
+
 	// 数据看板
 	go model.UpdateQuotaData()
 

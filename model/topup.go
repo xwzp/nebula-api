@@ -12,15 +12,17 @@ import (
 )
 
 type TopUp struct {
-	Id               int     `json:"id"`
-	UserId           int     `json:"user_id" gorm:"index"`
-	Amount           int64   `json:"amount"`
-	Money            float64 `json:"money"`
-	TradeNo          string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
-	PaymentMethod    string  `json:"payment_method" gorm:"type:varchar(50)"`
-	CreateTime       int64   `json:"create_time"`
-	CompleteTime     int64   `json:"complete_time"`
-	Status           string  `json:"status"`
+	Id            int     `json:"id"`
+	UserId        int     `json:"user_id" gorm:"index"`
+	Amount        int64   `json:"amount"`
+	Money         float64 `json:"money"`
+	TradeNo       string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
+	PaymentMethod string  `json:"payment_method" gorm:"type:varchar(50)"`
+	CreateTime    int64   `json:"create_time"`
+	CompleteTime  int64   `json:"complete_time"`
+	Status        string  `json:"status"`
+	CodeUrl       string  `json:"code_url,omitempty" gorm:"type:varchar(512)"`
+	Username      string  `json:"username,omitempty" gorm:"-"`
 }
 
 func (topUp *TopUp) Insert() error {
@@ -33,6 +35,15 @@ func (topUp *TopUp) Update() error {
 	var err error
 	err = DB.Save(topUp).Error
 	return err
+}
+
+// CountUserPendingTopUps 统计用户指定支付方式的待支付订单数
+func CountUserPendingTopUps(userId int, paymentMethod string) (int64, error) {
+	var count int64
+	err := DB.Model(&TopUp{}).
+		Where("user_id = ? AND status = ? AND payment_method = ?", userId, common.TopUpStatusPending, paymentMethod).
+		Count(&count).Error
+	return count, err
 }
 
 func GetTopUpById(id int) *TopUp {
@@ -375,6 +386,61 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 	RecordLog(topUp.UserId, LogTypeTopup, fmt.Sprintf("使用Creem充值成功，充值额度: %v，支付金额：%.2f", quota, topUp.Money))
 
 	return nil
+}
+
+// CancelTopUp 取消待支付订单
+func CancelTopUp(tradeNo string, userId int, isAdmin bool) error {
+	if tradeNo == "" {
+		return errors.New("未提供订单号")
+	}
+
+	refCol := "`trade_no`"
+	if common.UsingPostgreSQL {
+		refCol = `"trade_no"`
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		topUp := &TopUp{}
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
+			return errors.New("充值订单不存在")
+		}
+		if topUp.Status != common.TopUpStatusPending {
+			return errors.New("仅可取消待支付订单")
+		}
+		if !isAdmin && topUp.UserId != userId {
+			return errors.New("无权取消该订单")
+		}
+		topUp.Status = common.TopUpStatusCancelled
+		return tx.Save(topUp).Error
+	})
+}
+
+// ExpirePendingTopUps 将超过指定时间的 pending 订单标记为 expired，返回受影响的微信订单号
+func ExpirePendingTopUps(expireBeforeTimestamp int64) (wechatTradeNos []string, err error) {
+	// 先查出即将过期的微信订单号（用于后续调用微信关闭 API）
+	var wechatOrders []TopUp
+	DB.Where("status = ? AND payment_method = ? AND create_time < ?",
+		common.TopUpStatusPending, "wechat", expireBeforeTimestamp).
+		Select("trade_no").Find(&wechatOrders)
+	for _, o := range wechatOrders {
+		wechatTradeNos = append(wechatTradeNos, o.TradeNo)
+	}
+
+	// 批量更新所有过期的 pending 订单
+	result := DB.Model(&TopUp{}).
+		Where("status = ? AND create_time < ?", common.TopUpStatusPending, expireBeforeTimestamp).
+		Update("status", common.TopUpStatusExpired)
+	return wechatTradeNos, result.Error
+}
+
+// FillTopUpUsername 为 TopUp 列表填充 Username
+func FillTopUpUsername(topups []*TopUp) {
+	for _, t := range topups {
+		username, err := GetUsernameById(t.UserId, false)
+		if err == nil {
+			t.Username = username
+		}
+	}
 }
 
 func RechargeWechat(tradeNo string) (err error) {

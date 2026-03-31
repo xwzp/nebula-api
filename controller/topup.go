@@ -23,8 +23,12 @@ import (
 )
 
 func GetTopUpInfo(c *gin.Context) {
-	// 获取支付方式
-	payMethods := operation_setting.PayMethods
+	// 只有 Epay 启用时才包含 Epay 支付方式（支付宝/微信/自定义等）
+	enableOnlineTopUp := operation_setting.PayAddress != "" && operation_setting.EpayId != "" && operation_setting.EpayKey != ""
+	var payMethods []map[string]string
+	if enableOnlineTopUp {
+		payMethods = operation_setting.PayMethods
+	}
 
 	// 如果启用了 Stripe 支付，添加到支付方法列表
 	if setting.StripeApiSecret != "" && setting.StripeWebhookSecret != "" && setting.StripePriceId != "" {
@@ -85,6 +89,12 @@ func GetTopUpInfo(c *gin.Context) {
 		setting.WechatPayMchSerialNo != "" &&
 		setting.WechatPayMchPrivateKey != "" &&
 		setting.WechatPayAppId != ""
+	// 微信支付有效最低充值：取 per-gateway 和全局的较大值
+	effectiveWechatMinTopUp := setting.WechatPayMinTopUp
+	if operation_setting.MinTopUp > effectiveWechatMinTopUp {
+		effectiveWechatMinTopUp = operation_setting.MinTopUp
+	}
+
 	if enableWechatPay {
 		hasWechat := false
 		for _, method := range payMethods {
@@ -98,19 +108,20 @@ func GetTopUpInfo(c *gin.Context) {
 				"name":      "微信支付",
 				"type":      "wechat",
 				"color":     "rgba(var(--semi-green-5), 1)",
-				"min_topup": strconv.Itoa(setting.WechatPayMinTopUp),
+				"min_topup": strconv.Itoa(effectiveWechatMinTopUp),
 			}
 			payMethods = append(payMethods, wechatMethod)
 		}
 	}
 
 	data := gin.H{
-		"enable_online_topup":  operation_setting.PayAddress != "" && operation_setting.EpayId != "" && operation_setting.EpayKey != "",
+		"enable_online_topup":  enableOnlineTopUp,
 		"enable_stripe_topup":  setting.StripeApiSecret != "" && setting.StripeWebhookSecret != "" && setting.StripePriceId != "",
 		"enable_creem_topup":   setting.CreemApiKey != "" && setting.CreemProducts != "[]",
 		"enable_waffo_topup":   enableWaffo,
 		"enable_wechat_topup":  enableWechatPay,
-		"wechat_min_topup":     setting.WechatPayMinTopUp,
+		"wechat_min_topup":     effectiveWechatMinTopUp,
+		"wechat_unit_price":    setting.WechatPayUnitPrice,
 		"waffo_pay_methods": func() interface{} {
 			if enableWaffo {
 				return setting.GetWaffoPayMethods()
@@ -166,7 +177,12 @@ func getPayMoney(amount int64, group string) float64 {
 	}
 
 	dTopupGroupRatio := decimal.NewFromFloat(topupGroupRatio)
-	dPrice := decimal.NewFromFloat(operation_setting.Price)
+	// 使用 Epay 独立单价，为 0 时降级到全局 Price
+	unitPrice := setting.EpayUnitPrice
+	if unitPrice <= 0 {
+		unitPrice = operation_setting.Price
+	}
+	dPrice := decimal.NewFromFloat(unitPrice)
 	// apply optional preset discount by the original request amount (if configured), default 1.0
 	discount := 1.0
 	if ds, ok := operation_setting.GetPaymentSetting().AmountDiscount[int(amount)]; ok {
@@ -182,7 +198,11 @@ func getPayMoney(amount int64, group string) float64 {
 }
 
 func getMinTopup() int64 {
-	minTopup := operation_setting.MinTopUp
+	// 使用 Epay 独立最低充值，为 0 时降级到全局 MinTopUp
+	minTopup := setting.EpayMinTopUp
+	if minTopup <= 0 {
+		minTopup = operation_setting.MinTopUp
+	}
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
 		dMinTopup := decimal.NewFromInt(int64(minTopup))
 		dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
@@ -439,6 +459,7 @@ func GetUserTopUps(c *gin.Context) {
 		return
 	}
 
+	model.FillTopUpUsername(topups)
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(topups)
 	common.ApiSuccess(c, pageInfo)
@@ -464,6 +485,7 @@ func GetAllTopUps(c *gin.Context) {
 		return
 	}
 
+	model.FillTopUpUsername(topups)
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(topups)
 	common.ApiSuccess(c, pageInfo)
