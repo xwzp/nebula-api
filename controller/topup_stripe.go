@@ -91,7 +91,7 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 
 	id := c.GetInt("id")
 	user, _ := model.GetUserById(id, false)
-	chargedMoney := GetChargedAmount(float64(req.Amount), *user)
+	payMoney := getStripePayMoney(float64(req.Amount), user.Group)
 
 	reference := fmt.Sprintf("new-api-ref-%d-%d-%s", user.Id, time.Now().UnixMilli(), randstr.String(4))
 	referenceId := "ref_" + common.Sha1([]byte(reference))
@@ -106,7 +106,7 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 	topUp := &model.TopUp{
 		UserId:        id,
 		Amount:        req.Amount,
-		Money:         chargedMoney,
+		Money:         payMoney,
 		TradeNo:       referenceId,
 		PaymentMethod: PaymentMethodStripe,
 		CreateTime:    time.Now().Unix(),
@@ -313,15 +313,6 @@ func genStripeLink(referenceId string, customerId string, email string, amount i
 	}
 
 	return result.URL, nil
-}
-
-func GetChargedAmount(count float64, user model.User) float64 {
-	topUpGroupRatio := common.GetTopupGroupRatio(user.Group)
-	if topUpGroupRatio == 0 {
-		topUpGroupRatio = 1
-	}
-
-	return count * topUpGroupRatio
 }
 
 func getStripePayMoney(amount float64, group string) float64 {
