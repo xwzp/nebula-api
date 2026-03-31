@@ -105,6 +105,8 @@ func InitOptionMap() {
 	common.OptionMap["WaffoUnitPrice"] = strconv.FormatFloat(setting.WaffoUnitPrice, 'f', -1, 64)
 	common.OptionMap["WaffoMinTopUp"] = strconv.Itoa(setting.WaffoMinTopUp)
 	common.OptionMap["WaffoPayMethods"] = setting.WaffoPayMethods2JsonString()
+	common.OptionMap["EpayUnitPrice"] = strconv.FormatFloat(setting.EpayUnitPrice, 'f', -1, 64)
+	common.OptionMap["EpayMinTopUp"] = strconv.Itoa(setting.EpayMinTopUp)
 	common.OptionMap["WechatPayEnabled"] = strconv.FormatBool(setting.WechatPayEnabled)
 	common.OptionMap["WechatPayMchId"] = setting.WechatPayMchId
 	common.OptionMap["WechatPayMchApiV3Key"] = setting.WechatPayMchApiV3Key
@@ -415,6 +417,10 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.WaffoUnitPrice, _ = strconv.ParseFloat(value, 64)
 	case "WaffoMinTopUp":
 		setting.WaffoMinTopUp, _ = strconv.Atoi(value)
+	case "EpayUnitPrice":
+		setting.EpayUnitPrice, _ = strconv.ParseFloat(value, 64)
+	case "EpayMinTopUp":
+		setting.EpayMinTopUp, _ = strconv.Atoi(value)
 	case "WechatPayMchId":
 		setting.WechatPayMchId = value
 	case "WechatPayMchApiV3Key":
