@@ -30,7 +30,6 @@ import {
   getQuotaPerUnit,
 } from '../../helpers';
 import { Modal, Toast } from '@douyinfe/semi-ui';
-import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
@@ -40,6 +39,7 @@ import InvitationCard from './InvitationCard';
 import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
+import ScanPayModal from './modals/WechatPayModal';
 
 const TopUp = () => {
   const { t } = useTranslation();
@@ -119,6 +119,7 @@ const TopUp = () => {
   const [topupInfo, setTopupInfo] = useState({
     amount_options: [],
     discount: {},
+    topup_group_ratio: 1,
   });
 
   const topUp = async () => {
@@ -464,6 +465,7 @@ const TopUp = () => {
         setTopupInfo({
           amount_options: data.amount_options || [],
           discount: data.discount || {},
+          topup_group_ratio: data.topup_group_ratio || 1,
         });
 
         // 处理支付方式
@@ -872,30 +874,16 @@ const TopUp = () => {
         )}
       </Modal>
 
-      {/* 微信支付二维码模态框 */}
-      <Modal
-        title={t('微信支付')}
+      {/* 扫码支付二维码模态框 */}
+      <ScanPayModal
         visible={wechatQrOpen}
         onCancel={() => setWechatQrOpen(false)}
-        footer={null}
-        centered
-        maskClosable={false}
-      >
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          <p>{t('请使用微信扫描下方二维码完成支付')}</p>
-          {wechatPayMoney > 0 && (
-            <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--semi-color-success)' }}>
-              {t('支付金额')}：¥{wechatPayMoney.toFixed(2)}
-            </p>
-          )}
-          {wechatCodeUrl && (
-            <QRCodeSVG value={wechatCodeUrl} size={256} />
-          )}
-          <p style={{ marginTop: '16px', color: 'var(--semi-color-text-2)' }}>
-            {t('支付完成后请关闭此窗口并刷新页面')}
-          </p>
-        </div>
-      </Modal>
+        codeUrl={wechatCodeUrl}
+        payMoney={wechatPayMoney}
+        topUpCount={topUpCount}
+        renderQuotaWithAmount={renderQuotaWithAmount}
+        paymentMethod='wechat'
+      />
 
       {/* 主布局区域 */}
       <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>

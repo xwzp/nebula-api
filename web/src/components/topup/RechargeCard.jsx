@@ -402,7 +402,8 @@ const RechargeCard = ({
                         !enableOnlineTopUp && !enableStripeTopUp && enableWechatTopUp && wechatUnitPrice > 0
                           ? wechatUnitPrice
                           : priceRatio;
-                      const originalPrice = preset.value * effectivePriceRatio;
+                      const topupGroupRatio = topupInfo?.topup_group_ratio || 1;
+                      const originalPrice = preset.value * effectivePriceRatio * topupGroupRatio;
                       const discountedPrice = originalPrice * discount;
                       const hasDiscount = discount < 1.0;
                       const actualPay = discountedPrice;

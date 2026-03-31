@@ -114,6 +114,17 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	// 获取当前用户的充值分组倍率
+	topupGroupRatio := 1.0
+	if userId := c.GetInt("id"); userId > 0 {
+		if group, err := model.GetUserGroup(userId, true); err == nil {
+			topupGroupRatio = common.GetTopupGroupRatio(group)
+			if topupGroupRatio == 0 {
+				topupGroupRatio = 1
+			}
+		}
+	}
+
 	data := gin.H{
 		"enable_online_topup":  enableOnlineTopUp,
 		"enable_stripe_topup":  setting.StripeApiSecret != "" && setting.StripeWebhookSecret != "" && setting.StripePriceId != "",
@@ -135,6 +146,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"waffo_min_topup":     setting.WaffoMinTopUp,
 		"amount_options":      operation_setting.GetPaymentSetting().AmountOptions,
 		"discount":            operation_setting.GetPaymentSetting().AmountDiscount,
+		"topup_group_ratio":   topupGroupRatio,
 	}
 	common.ApiSuccess(c, data)
 }
