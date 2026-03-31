@@ -121,6 +121,9 @@ func InitOptionMap() {
 	common.OptionMap["AlipayPrivateKey"] = setting.AlipayPrivateKey
 	common.OptionMap["AlipayPublicKey"] = setting.AlipayPublicKey
 	common.OptionMap["AlipayNotifyUrl"] = setting.AlipayNotifyUrl
+	common.OptionMap["AlipayAppCertPublicKey"] = setting.AlipayAppCertPublicKey
+	common.OptionMap["AlipayCertPublicKey"] = setting.AlipayCertPublicKey
+	common.OptionMap["AlipayRootCert"] = setting.AlipayRootCert
 	common.OptionMap["AlipayUnitPrice"] = strconv.FormatFloat(setting.AlipayUnitPrice, 'f', -1, 64)
 	common.OptionMap["AlipayMinTopUp"] = strconv.Itoa(setting.AlipayMinTopUp)
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
@@ -454,6 +457,12 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.AlipayPublicKey = value
 	case "AlipayNotifyUrl":
 		setting.AlipayNotifyUrl = value
+	case "AlipayAppCertPublicKey":
+		setting.AlipayAppCertPublicKey = value
+	case "AlipayCertPublicKey":
+		setting.AlipayCertPublicKey = value
+	case "AlipayRootCert":
+		setting.AlipayRootCert = value
 	case "AlipayUnitPrice":
 		setting.AlipayUnitPrice, _ = strconv.ParseFloat(value, 64)
 	case "AlipayMinTopUp":

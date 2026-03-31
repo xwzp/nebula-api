@@ -7,6 +7,8 @@ import {
   Col,
   Typography,
   Spin,
+  RadioGroup,
+  Radio,
 } from '@douyinfe/semi-ui';
 const { Text } = Typography;
 import {
@@ -25,12 +27,24 @@ export default function SettingsPaymentGatewayAlipay(props) {
     AlipayAppId: '',
     AlipayPrivateKey: '',
     AlipayPublicKey: '',
+    AlipayAppCertPublicKey: '',
+    AlipayCertPublicKey: '',
+    AlipayRootCert: '',
     AlipayNotifyUrl: '',
     AlipayUnitPrice: 0,
     AlipayMinTopUp: 1,
   });
   const [originInputs, setOriginInputs] = useState({});
   const formApiRef = useRef(null);
+
+  // 自动检测模式：证书字段有值 → cert，否则 → publicKey
+  const detectMode = (opts) => {
+    if (opts.AlipayAppCertPublicKey || opts.AlipayCertPublicKey || opts.AlipayRootCert) {
+      return 'cert';
+    }
+    return 'publicKey';
+  };
+  const [certMode, setCertMode] = useState('cert');
 
   useEffect(() => {
     if (props.options && formApiRef.current) {
@@ -42,6 +56,9 @@ export default function SettingsPaymentGatewayAlipay(props) {
         AlipayAppId: props.options.AlipayAppId || '',
         AlipayPrivateKey: props.options.AlipayPrivateKey || '',
         AlipayPublicKey: props.options.AlipayPublicKey || '',
+        AlipayAppCertPublicKey: props.options.AlipayAppCertPublicKey || '',
+        AlipayCertPublicKey: props.options.AlipayCertPublicKey || '',
+        AlipayRootCert: props.options.AlipayRootCert || '',
         AlipayNotifyUrl: props.options.AlipayNotifyUrl || '',
         AlipayUnitPrice:
           props.options.AlipayUnitPrice !== undefined
@@ -54,6 +71,7 @@ export default function SettingsPaymentGatewayAlipay(props) {
       };
       setInputs(currentInputs);
       setOriginInputs({ ...currentInputs });
+      setCertMode(detectMode(currentInputs));
       formApiRef.current.setValues(currentInputs);
     }
   }, [props.options]);
@@ -85,12 +103,42 @@ export default function SettingsPaymentGatewayAlipay(props) {
           value: inputs.AlipayPrivateKey,
         });
       }
-      if (inputs.AlipayPublicKey !== '') {
-        options.push({
-          key: 'AlipayPublicKey',
-          value: inputs.AlipayPublicKey,
-        });
+
+      if (certMode === 'cert') {
+        // 证书模式：保存三个证书，清空普通公钥
+        if (inputs.AlipayAppCertPublicKey !== '') {
+          options.push({
+            key: 'AlipayAppCertPublicKey',
+            value: inputs.AlipayAppCertPublicKey,
+          });
+        }
+        if (inputs.AlipayCertPublicKey !== '') {
+          options.push({
+            key: 'AlipayCertPublicKey',
+            value: inputs.AlipayCertPublicKey,
+          });
+        }
+        if (inputs.AlipayRootCert !== '') {
+          options.push({
+            key: 'AlipayRootCert',
+            value: inputs.AlipayRootCert,
+          });
+        }
+        // 清空普通公钥
+        options.push({ key: 'AlipayPublicKey', value: '' });
+      } else {
+        // 普通公钥模式：保存公钥，清空三个证书
+        if (inputs.AlipayPublicKey !== '') {
+          options.push({
+            key: 'AlipayPublicKey',
+            value: inputs.AlipayPublicKey,
+          });
+        }
+        options.push({ key: 'AlipayAppCertPublicKey', value: '' });
+        options.push({ key: 'AlipayCertPublicKey', value: '' });
+        options.push({ key: 'AlipayRootCert', value: '' });
       }
+
       options.push({
         key: 'AlipayNotifyUrl',
         value: inputs.AlipayNotifyUrl || '',
@@ -201,18 +249,83 @@ export default function SettingsPaymentGatewayAlipay(props) {
               />
             </Col>
           </Row>
-          <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}>
-            <Col xs={24} sm={24} md={24} lg={24} xl={24}>
-              <Form.TextArea
-                field='AlipayPublicKey'
-                label={t('支付宝公钥')}
-                placeholder={t(
-                  '支付宝公钥内容，用于验签通知',
-                )}
-                autosize={{ minRows: 3, maxRows: 6 }}
-              />
+
+          {/* 验签模式选择 */}
+          <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }} style={{ marginTop: 16, marginBottom: 8 }}>
+            <Col span={24}>
+              <div style={{ marginBottom: 8 }}>
+                <Text strong>{t('验签模式')}</Text>
+              </div>
+              <RadioGroup
+                value={certMode}
+                onChange={(e) => setCertMode(e.target.value)}
+                type='button'
+              >
+                <Radio value='cert'>{t('公钥证书模式（推荐）')}</Radio>
+                <Radio value='publicKey'>{t('普通公钥模式')}</Radio>
+              </RadioGroup>
             </Col>
           </Row>
+
+          {certMode === 'cert' ? (
+            <>
+              <Banner
+                type='success'
+                description={t('请在支付宝开放平台下载三个证书文件，将内容粘贴到下方。')}
+                style={{ marginBottom: 12 }}
+              />
+              <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}>
+                <Col xs={24} sm={24} md={24} lg={24} xl={24}>
+                  <Form.TextArea
+                    field='AlipayAppCertPublicKey'
+                    label={t('应用公钥证书（appCertPublicKey.crt）')}
+                    placeholder={t(
+                      '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+                    )}
+                    autosize={{ minRows: 3, maxRows: 6 }}
+                  />
+                </Col>
+              </Row>
+              <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}>
+                <Col xs={24} sm={24} md={24} lg={24} xl={24}>
+                  <Form.TextArea
+                    field='AlipayCertPublicKey'
+                    label={t('支付宝公钥证书（alipayCertPublicKey_RSA2.crt）')}
+                    placeholder={t(
+                      '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+                    )}
+                    autosize={{ minRows: 3, maxRows: 6 }}
+                  />
+                </Col>
+              </Row>
+              <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}>
+                <Col xs={24} sm={24} md={24} lg={24} xl={24}>
+                  <Form.TextArea
+                    field='AlipayRootCert'
+                    label={t('支付宝根证书（alipayRootCert.crt）')}
+                    placeholder={t(
+                      '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+                    )}
+                    autosize={{ minRows: 3, maxRows: 6 }}
+                  />
+                </Col>
+              </Row>
+            </>
+          ) : (
+            <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}>
+              <Col xs={24} sm={24} md={24} lg={24} xl={24}>
+                <Form.TextArea
+                  field='AlipayPublicKey'
+                  label={t('支付宝公钥')}
+                  placeholder={t(
+                    '支付宝公钥字符串（非证书），在开放平台接口加签方式中获取',
+                  )}
+                  autosize={{ minRows: 3, maxRows: 6 }}
+                />
+              </Col>
+            </Row>
+          )}
+
           <Row
             gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}
             style={{ marginTop: 16 }}

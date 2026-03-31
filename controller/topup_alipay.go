@@ -26,16 +26,29 @@ type AlipayPayRequest struct {
 	PaymentMethod string `json:"payment_method"`
 }
 
-// getAlipayClient 初始化支付宝 SDK Client
+// getAlipayClient 初始化支付宝 SDK Client，自动检测公钥模式或证书模式
 func getAlipayClient() (*alipay.Client, error) {
 	client, err := alipay.New(setting.AlipayAppId, setting.AlipayPrivateKey, true)
 	if err != nil {
 		return nil, fmt.Errorf("初始化支付宝客户端失败: %v", err)
 	}
 
-	// 加载支付宝公钥（用于验签）
-	if err := client.LoadAliPayPublicKey(setting.AlipayPublicKey); err != nil {
-		return nil, fmt.Errorf("加载支付宝公钥失败: %v", err)
+	if setting.IsAlipayCertMode() {
+		// 公钥证书模式：加载三个证书
+		if err := client.LoadAppCertPublicKey(setting.AlipayAppCertPublicKey); err != nil {
+			return nil, fmt.Errorf("加载应用公钥证书失败: %v", err)
+		}
+		if err := client.LoadAlipayCertPublicKey(setting.AlipayCertPublicKey); err != nil {
+			return nil, fmt.Errorf("加载支付宝公钥证书失败: %v", err)
+		}
+		if err := client.LoadAliPayRootCert(setting.AlipayRootCert); err != nil {
+			return nil, fmt.Errorf("加载支付宝根证书失败: %v", err)
+		}
+	} else {
+		// 普通公钥模式：直接加载公钥字符串
+		if err := client.LoadAliPayPublicKey(setting.AlipayPublicKey); err != nil {
+			return nil, fmt.Errorf("加载支付宝公钥失败: %v", err)
+		}
 	}
 
 	return client, nil

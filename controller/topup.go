@@ -115,10 +115,7 @@ func GetTopUpInfo(c *gin.Context) {
 	}
 
 	// 支付宝当面付
-	enableAlipay := setting.AlipayEnabled &&
-		setting.AlipayAppId != "" &&
-		setting.AlipayPrivateKey != "" &&
-		setting.AlipayPublicKey != ""
+	enableAlipay := setting.AlipayEnabled && setting.IsAlipayConfigured()
 	effectiveAlipayMinTopUp := setting.AlipayMinTopUp
 	if operation_setting.MinTopUp > effectiveAlipayMinTopUp {
 		effectiveAlipayMinTopUp = operation_setting.MinTopUp
