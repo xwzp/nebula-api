@@ -21,9 +21,9 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
+import BrandLogo from '../logo/BrandLogo';
 import {
   API,
-  getLogo,
   showError,
   showInfo,
   showSuccess,
@@ -113,7 +113,6 @@ const LoginForm = () => {
   const githubButtonText = t(githubButtonTextKeyByState[githubButtonState]);
   const [customOAuthLoading, setCustomOAuthLoading] = useState({});
 
-  const logo = getLogo();
   const systemName = getSystemName();
 
   let affCode = new URLSearchParams(window.location.search).get('aff');
@@ -505,7 +504,7 @@ const LoginForm = () => {
       <div className='flex flex-col items-center'>
         <div className='w-full max-w-md'>
           <div className='flex items-center justify-center mb-6 gap-2'>
-            <img src={logo} alt='Logo' className='h-10 rounded-full' />
+            <BrandLogo size={40} />
             <Title heading={3} className='!text-gray-800'>
               {systemName}
             </Title>
@@ -721,7 +720,7 @@ const LoginForm = () => {
       <div className='flex flex-col items-center'>
         <div className='w-full max-w-md'>
           <div className='flex items-center justify-center mb-6 gap-2'>
-            <img src={logo} alt='Logo' className='h-10 rounded-full' />
+            <BrandLogo size={40} />
             <Title heading={3}>{systemName}</Title>
           </div>
 

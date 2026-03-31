@@ -19,14 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Typography, Tag } from '@douyinfe/semi-ui';
+import { Tag } from '@douyinfe/semi-ui';
 import SkeletonWrapper from '../components/SkeletonWrapper';
+import BrandLogo from '../../logo/BrandLogo';
 
 const HeaderLogo = ({
   isMobile,
   isConsoleRoute,
-  logo,
-  logoLoaded,
   isLoading,
   systemName,
   isSelfUseMode,
@@ -39,22 +38,8 @@ const HeaderLogo = ({
 
   return (
     <Link to='/' className='group flex items-center gap-2'>
-      <div
-        className='relative w-8 h-8 md:w-8 md:h-8 flex items-center justify-center transition-all duration-200 group-hover:scale-110'
-        style={{
-          borderRadius: 8,
-          background: 'linear-gradient(135deg, #ff3bff, #ec4899, #8b5cf6, #3b82f6)',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        }}
-      >
-        <svg
-          width={18}
-          height={18}
-          viewBox='0 0 24 24'
-          fill='white'
-        >
-          <path d='M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z' />
-        </svg>
+      <div className='transition-all duration-200 group-hover:scale-110'>
+        <BrandLogo size={32} />
       </div>
       <div className='hidden md:flex items-center gap-2'>
         <div className='flex items-center gap-2'>
@@ -66,7 +51,8 @@ const HeaderLogo = ({
           >
             <span
               style={{
-                background: 'linear-gradient(to right, #ff3bff, #ec4899, #8b5cf6, #3b82f6)',
+                background:
+                  'linear-gradient(to right, #ff3bff, #ec4899, #8b5cf6, #3b82f6)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
