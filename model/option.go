@@ -116,6 +116,13 @@ func InitOptionMap() {
 	common.OptionMap["WechatPayNotifyUrl"] = setting.WechatPayNotifyUrl
 	common.OptionMap["WechatPayUnitPrice"] = strconv.FormatFloat(setting.WechatPayUnitPrice, 'f', -1, 64)
 	common.OptionMap["WechatPayMinTopUp"] = strconv.Itoa(setting.WechatPayMinTopUp)
+	common.OptionMap["AlipayEnabled"] = strconv.FormatBool(setting.AlipayEnabled)
+	common.OptionMap["AlipayAppId"] = setting.AlipayAppId
+	common.OptionMap["AlipayPrivateKey"] = setting.AlipayPrivateKey
+	common.OptionMap["AlipayPublicKey"] = setting.AlipayPublicKey
+	common.OptionMap["AlipayNotifyUrl"] = setting.AlipayNotifyUrl
+	common.OptionMap["AlipayUnitPrice"] = strconv.FormatFloat(setting.AlipayUnitPrice, 'f', -1, 64)
+	common.OptionMap["AlipayMinTopUp"] = strconv.Itoa(setting.AlipayMinTopUp)
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
 	common.OptionMap["Chats"] = setting.Chats2JsonString()
 	common.OptionMap["AutoGroups"] = setting.AutoGroups2JsonString()
@@ -325,6 +332,8 @@ func updateOptionMap(key string, value string) (err error) {
 			setting.DefaultUseAutoGroup = boolValue
 		case "WechatPayEnabled":
 			setting.WechatPayEnabled = boolValue
+		case "AlipayEnabled":
+			setting.AlipayEnabled = boolValue
 		case "ExposeRatioEnabled":
 			ratio_setting.SetExposeRatioEnabled(boolValue)
 		}
@@ -437,6 +446,18 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.WechatPayUnitPrice, _ = strconv.ParseFloat(value, 64)
 	case "WechatPayMinTopUp":
 		setting.WechatPayMinTopUp, _ = strconv.Atoi(value)
+	case "AlipayAppId":
+		setting.AlipayAppId = value
+	case "AlipayPrivateKey":
+		setting.AlipayPrivateKey = value
+	case "AlipayPublicKey":
+		setting.AlipayPublicKey = value
+	case "AlipayNotifyUrl":
+		setting.AlipayNotifyUrl = value
+	case "AlipayUnitPrice":
+		setting.AlipayUnitPrice, _ = strconv.ParseFloat(value, 64)
+	case "AlipayMinTopUp":
+		setting.AlipayMinTopUp, _ = strconv.Atoi(value)
 	case "TopupGroupRatio":
 		err = common.UpdateTopupGroupRatioByJSONString(value)
 	case "GitHubClientId":
