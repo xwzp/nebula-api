@@ -114,6 +114,35 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	// 支付宝当面付
+	enableAlipay := setting.AlipayEnabled &&
+		setting.AlipayAppId != "" &&
+		setting.AlipayPrivateKey != "" &&
+		setting.AlipayPublicKey != ""
+	effectiveAlipayMinTopUp := setting.AlipayMinTopUp
+	if operation_setting.MinTopUp > effectiveAlipayMinTopUp {
+		effectiveAlipayMinTopUp = operation_setting.MinTopUp
+	}
+
+	if enableAlipay {
+		hasAlipay := false
+		for _, method := range payMethods {
+			if method["type"] == "alipay" {
+				hasAlipay = true
+				break
+			}
+		}
+		if !hasAlipay {
+			alipayMethod := map[string]string{
+				"name":      "支付宝",
+				"type":      "alipay",
+				"color":     "rgba(var(--semi-blue-5), 1)",
+				"min_topup": strconv.Itoa(effectiveAlipayMinTopUp),
+			}
+			payMethods = append(payMethods, alipayMethod)
+		}
+	}
+
 	// 获取当前用户的充值分组倍率
 	topupGroupRatio := 1.0
 	if userId := c.GetInt("id"); userId > 0 {
@@ -133,6 +162,9 @@ func GetTopUpInfo(c *gin.Context) {
 		"enable_wechat_topup":  enableWechatPay,
 		"wechat_min_topup":     effectiveWechatMinTopUp,
 		"wechat_unit_price":    setting.WechatPayUnitPrice,
+		"enable_alipay_topup":  enableAlipay,
+		"alipay_min_topup":     effectiveAlipayMinTopUp,
+		"alipay_unit_price":    setting.AlipayUnitPrice,
 		"waffo_pay_methods": func() interface{} {
 			if enableWaffo {
 				return setting.GetWaffoPayMethods()

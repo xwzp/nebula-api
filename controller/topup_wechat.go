@@ -381,6 +381,10 @@ func CancelTopUp(c *gin.Context) {
 	if topUp.PaymentMethod == PaymentMethodWechat {
 		go closeWechatOrder(req.TradeNo)
 	}
+	// 如果是支付宝订单，同步关闭支付宝侧订单
+	if topUp.PaymentMethod == PaymentMethodAlipay {
+		go closeAlipayOrder(req.TradeNo)
+	}
 
 	log.Printf("订单取消成功 - 用户: %d, 订单: %s, 管理员: %v", userId, req.TradeNo, isAdminUser)
 	c.JSON(200, gin.H{"message": "success", "data": "订单已取消"})
@@ -428,8 +432,8 @@ func GetTopUpQrCode(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "error", "data": "订单非待支付状态"})
 		return
 	}
-	if topUp.PaymentMethod != PaymentMethodWechat {
-		c.JSON(200, gin.H{"message": "error", "data": "仅支持微信支付订单"})
+	if topUp.PaymentMethod != PaymentMethodWechat && topUp.PaymentMethod != PaymentMethodAlipay {
+		c.JSON(200, gin.H{"message": "error", "data": "仅支持微信/支付宝支付订单"})
 		return
 	}
 	if topUp.CodeUrl == "" {
@@ -458,15 +462,21 @@ func StartTopUpExpireCleanup() {
 	for {
 		time.Sleep(15 * time.Minute)
 		expireBefore := time.Now().Add(-15 * time.Minute).Unix()
-		wechatTradeNos, err := model.ExpirePendingTopUps(expireBefore)
+		wechatTradeNos, alipayTradeNos, err := model.ExpirePendingTopUps(expireBefore)
 		if err != nil {
 			log.Printf("清理过期订单失败: %v", err)
 			continue
 		}
 		if len(wechatTradeNos) > 0 {
-			log.Printf("已将 %d 笔过期订单标记为 expired，正在关闭微信侧订单", len(wechatTradeNos))
+			log.Printf("已将 %d 笔过期微信订单标记为 expired，正在关闭微信侧订单", len(wechatTradeNos))
 			for _, tradeNo := range wechatTradeNos {
 				closeWechatOrder(tradeNo)
+			}
+		}
+		if len(alipayTradeNos) > 0 {
+			log.Printf("已将 %d 笔过期支付宝订单标记为 expired，正在关闭支付宝侧订单", len(alipayTradeNos))
+			for _, tradeNo := range alipayTradeNos {
+				closeAlipayOrder(tradeNo)
 			}
 		}
 	}
