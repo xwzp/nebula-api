@@ -1053,6 +1053,7 @@
     "实付": "Actual payment",
     "实付金额": "Actual payment amount",
     "实付金额：": "Actual payment amount: ",
+    "到账 token：": "Tokens credited: ",
     "实际模型": "Actual model",
     "实际请求体": "Actual request body",
     "容器": "Container",

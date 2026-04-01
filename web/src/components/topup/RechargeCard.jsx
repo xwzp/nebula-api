@@ -47,7 +47,7 @@ import {
 } from 'lucide-react';
 import { IconGift } from '@douyinfe/semi-icons';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
-import { getCurrencyConfig } from '../../helpers/render';
+import { getCurrencyConfig, renderUnitWithQuota, renderNumber } from '../../helpers/render';
 import SubscriptionPlansCard from './SubscriptionPlansCard';
 
 const { Text } = Typography;
@@ -290,6 +290,13 @@ const RechargeCard = ({
                             {t('实付金额：')}
                             <span style={{ color: 'red' }}>
                               {renderAmount()}
+                            </span>
+                          </Text>
+                          <br />
+                          <Text type='secondary' className='text-red-600'>
+                            {t('到账 token：')}
+                            <span style={{ color: 'red' }}>
+                              {renderNumber(renderUnitWithQuota(topUpCount))}
                             </span>
                           </Text>
                         </Skeleton>
