@@ -793,6 +793,61 @@ html:not(.dark) .blur-ball-teal {
   opacity: 0.2;
 }
 
+/* ==================== 首页全屏翻页 (Scroll Snap) ==================== */
+.scroll-snap-container {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-snap-container > section {
+  scroll-snap-align: start;
+}
+
+/* ==================== 新首页动画 ==================== */
+@keyframes gradient-x {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 5s ease infinite;
+}
+
+/* 首页背景网格 */
+.home-bg-grid {
+  background-image: linear-gradient(
+      to right,
+      #e5e7eb 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, #e5e7eb 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, white, transparent 90%);
+  -webkit-mask-image: linear-gradient(to bottom, white, transparent 90%);
+  opacity: 0.5;
+}
+
+html.dark .home-bg-grid {
+  background-image: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px
+    );
+  opacity: 0.4;
+}
+
 /* ==================== 卡片马卡龙模糊球（类封装） ==================== */
 /* 使用方式：给容器加上 with-pastel-balls 类即可，无需在 JSX 中插入额外节点 */
 .with-pastel-balls {

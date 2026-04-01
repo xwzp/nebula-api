@@ -20,8 +20,9 @@ For commercial licensing, please contact support@quantumnous.com
 export default {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
-    colors: {
-      'semi-color-white': 'var(--semi-color-white)',
+    extend: {
+      colors: {
+        'semi-color-white': 'var(--semi-color-white)',
       'semi-color-black': 'var(--semi-color-black)',
       'semi-color-primary': 'var(--semi-color-primary)',
       'semi-color-primary-hover': 'var(--semi-color-primary-hover)',
@@ -133,17 +134,17 @@ export default {
       'semi-color-data-18': 'var(--semi-color-data-18)',
       'semi-color-data-19': 'var(--semi-color-data-19)',
     },
-    extend: {
-      borderRadius: {
-        'semi-border-radius-extra-small':
-          'var(--semi-border-radius-extra-small)',
-        'semi-border-radius-small': 'var(--semi-border-radius-small)',
-        'semi-border-radius-medium': 'var(--semi-border-radius-medium)',
-        'semi-border-radius-large': 'var(--semi-border-radius-large)',
-        'semi-border-radius-circle': 'var(--semi-border-radius-circle)',
-        'semi-border-radius-full': 'var(--semi-border-radius-full)',
-      },
+    borderRadius: {
+      'semi-border-radius-extra-small':
+        'var(--semi-border-radius-extra-small)',
+      'semi-border-radius-small': 'var(--semi-border-radius-small)',
+      'semi-border-radius-medium': 'var(--semi-border-radius-medium)',
+      'semi-border-radius-large': 'var(--semi-border-radius-large)',
+      'semi-border-radius-circle': 'var(--semi-border-radius-circle)',
+      'semi-border-radius-full': 'var(--semi-border-radius-full)',
     },
   },
+  },
+  darkMode: 'class',
   plugins: [],
 };
