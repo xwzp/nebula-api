@@ -795,13 +795,19 @@ html:not(.dark) .blur-ball-teal {
 
 /* ==================== 首页全屏翻页 (Scroll Snap) ==================== */
 .scroll-snap-container {
-  scroll-snap-type: y mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
 
-.scroll-snap-container > section {
-  scroll-snap-align: start;
+/* 仅桌面端启用 scroll-snap，移动端内容可能超出一屏 */
+@media (min-width: 768px) {
+  .scroll-snap-container {
+    scroll-snap-type: y mandatory;
+  }
+
+  .scroll-snap-container > section {
+    scroll-snap-align: start;
+  }
 }
 
 /* ==================== 新首页动画 ==================== */

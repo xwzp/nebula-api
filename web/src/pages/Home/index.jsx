@@ -187,7 +187,7 @@ const HeroSection = ({ serverAddress, onCopy, copied, t }) => {
   return (
     <section
       id='hero'
-      className='min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-6'
+      className='md:min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-4 md:px-6 pt-24 pb-12 md:pt-0 md:pb-0'
     >
       <div className='max-w-5xl mx-auto text-center flex flex-col items-center'>
       <motion.div
@@ -204,7 +204,7 @@ const HeroSection = ({ serverAddress, onCopy, copied, t }) => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, delay: 0.1, ease: 'easeOut' }}
-        className='text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-tight text-slate-900 dark:text-white'
+        className='text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 md:mb-8 leading-tight text-slate-900 dark:text-white'
       >
         {t('原生的支持')} <br className='hidden md:block' />
         <span className='text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 animate-gradient-x'>
@@ -216,7 +216,7 @@ const HeroSection = ({ serverAddress, onCopy, copied, t }) => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, delay: 0.2, ease: 'easeOut' }}
-        className='text-lg md:text-xl text-slate-500 dark:text-zinc-400 mb-12 max-w-2xl'
+        className='text-base md:text-xl text-slate-500 dark:text-zinc-400 mb-8 md:mb-12 max-w-2xl px-2'
       >
         {t(
           '深度优化 API 路由，确保在 CLI 环境下依然拥有流畅的流式交互体验。开箱即用、价格实惠、专业运营，让开发者只关注代码本身。',
@@ -260,12 +260,12 @@ const HeroSection = ({ serverAddress, onCopy, copied, t }) => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1, delay: 0.5 }}
-        className='mt-20 w-full'
+        className='mt-12 md:mt-20 w-full overflow-hidden'
       >
-        <p className='text-sm font-medium text-slate-400 dark:text-zinc-500 mb-8 uppercase tracking-wider'>
+        <p className='text-xs md:text-sm font-medium text-slate-400 dark:text-zinc-500 mb-6 uppercase tracking-wider'>
           {t('支持全球顶级大模型')}
         </p>
-        <div className='flex flex-wrap justify-center gap-10 md:gap-16'>
+        <div className='flex flex-wrap justify-center gap-6 md:gap-16'>
           {[
             { Icon: Gemini, name: 'Gemini', color: true },
             { Icon: OpenAI, name: 'OpenAI', color: false },
@@ -274,19 +274,19 @@ const HeroSection = ({ serverAddress, onCopy, copied, t }) => {
           ].map(({ Icon, name, color }, i) => (
             <div
               key={i}
-              className='flex flex-col items-center gap-3 text-slate-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors group'
+              className='flex flex-col items-center gap-2 md:gap-3 text-slate-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors group w-[60px] md:w-auto'
             >
-              <div className='w-12 h-12 flex items-center justify-center transition-transform group-hover:scale-110 duration-300'>
+              <div className='w-8 h-8 md:w-12 md:h-12 flex items-center justify-center transition-transform group-hover:scale-110 duration-300'>
                 {color && Icon.Color ? <Icon.Color size={44} /> : <Icon size={44} />}
               </div>
-              <span className='text-sm font-semibold tracking-wide'>{name}</span>
+              <span className='text-xs md:text-sm font-semibold tracking-wide'>{name}</span>
             </div>
           ))}
-          <div className='flex flex-col items-center gap-3 text-slate-600 dark:text-zinc-400'>
-            <div className='w-12 h-12 flex items-center justify-center font-black text-2xl'>
+          <div className='flex flex-col items-center gap-2 md:gap-3 text-slate-600 dark:text-zinc-400 w-[60px] md:w-auto'>
+            <div className='w-8 h-8 md:w-12 md:h-12 flex items-center justify-center font-black text-xl md:text-2xl'>
               30+
             </div>
-            <span className='text-sm font-semibold tracking-wide'>More</span>
+            <span className='text-xs md:text-sm font-semibold tracking-wide'>More</span>
           </div>
         </div>
       </motion.div>
@@ -300,24 +300,24 @@ const SubscriptionSection = ({ t }) => {
   const [subCycle, setSubCycle] = useState('year');
 
   return (
-    <section id='pricing-sub' className='min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-6 py-12'>
+    <section id='pricing-sub' className='md:min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-4 md:px-6 py-12'>
       <div className='w-full max-w-6xl mx-auto'>
-      <div className='text-center mb-12'>
-        <h2 className='text-3xl md:text-4xl font-bold mb-4 text-slate-900 dark:text-white'>
+      <div className='text-center mb-10 md:mb-12 px-2'>
+        <h2 className='text-2xl md:text-4xl font-bold mb-4 text-slate-900 dark:text-white'>
           {t('简单透明的计费方式 — 订阅方案')}
         </h2>
-        <p className='text-slate-500 dark:text-zinc-400 text-lg'>
+        <p className='text-slate-500 dark:text-zinc-400 text-base md:text-lg'>
           {t('包月或包年订阅，享受更稳定、更独享的专属资源与权益')}
         </p>
       </div>
 
       {/* Month/Year Toggle */}
-      <div className='flex justify-center mb-12'>
-        <div className='bg-slate-100/80 dark:bg-zinc-800/80 backdrop-blur p-1 rounded-full inline-flex'>
+      <div className='flex justify-center mb-10 md:mb-12'>
+        <div className='bg-slate-100/80 dark:bg-zinc-800/80 backdrop-blur p-1 rounded-full inline-flex max-w-full overflow-x-auto scrollbar-hide'>
           <button
             onClick={() => setSubCycle('month')}
             className={cn(
-              'px-8 py-2.5 rounded-full text-sm font-medium transition-all duration-300 relative',
+              'px-6 md:px-8 py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-300 relative whitespace-nowrap',
               subCycle === 'month'
                 ? 'text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700',
@@ -334,7 +334,7 @@ const SubscriptionSection = ({ t }) => {
           <button
             onClick={() => setSubCycle('year')}
             className={cn(
-              'px-8 py-2.5 rounded-full text-sm font-medium transition-all duration-300 relative',
+              'px-6 md:px-8 py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-300 relative whitespace-nowrap',
               subCycle === 'year'
                 ? 'text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700',
@@ -355,7 +355,7 @@ const SubscriptionSection = ({ t }) => {
       </div>
 
       {/* Plan Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto'>
+      <div className='grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto px-2'>
         {SUBSCRIPTION_PLANS.map((plan, idx) => {
           const currentPrice =
             subCycle === 'year' ? plan.priceYearly : plan.priceMonthly;
@@ -364,9 +364,9 @@ const SubscriptionSection = ({ t }) => {
               key={idx}
               whileHover={{ y: -5 }}
               className={cn(
-                'bg-white dark:bg-zinc-800 rounded-3xl p-8 border transition-all duration-300 flex flex-col relative',
+                'bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border transition-all duration-300 flex flex-col relative',
                 plan.highlight
-                  ? 'border-purple-500/30 shadow-2xl shadow-purple-500/10 scale-105 z-10'
+                  ? 'border-purple-500/30 shadow-2xl shadow-purple-500/10 md:scale-105 z-10'
                   : 'border-slate-200/60 dark:border-zinc-700/60 shadow-lg shadow-slate-200/20 dark:shadow-black/20',
               )}
             >
@@ -441,19 +441,19 @@ const PayAsYouGoSection = ({ t }) => {
   return (
     <section
       id='pricing-payg'
-      className='min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-6 py-12'
+      className='md:min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-4 md:px-6 py-12'
     >
       <div className='w-full max-w-6xl mx-auto'>
-      <div className='text-center mb-12'>
-        <h2 className='text-3xl md:text-4xl font-bold mb-4 text-slate-900 dark:text-white'>
+      <div className='text-center mb-10 md:mb-12 px-2'>
+        <h2 className='text-2xl md:text-4xl font-bold mb-4 text-slate-900 dark:text-white'>
           {t('按量付费充值')}
         </h2>
-        <p className='text-slate-500 dark:text-zinc-400 text-lg'>
+        <p className='text-slate-500 dark:text-zinc-400 text-base md:text-lg'>
           {t('随充随用，支持所有模型无缝切换调用，额度永久有效')}
         </p>
       </div>
 
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 px-2'>
         {PAY_AS_YOU_GO_PLANS.map((plan, idx) => {
           const actualPrice = plan.discount
             ? plan.price * plan.discount
@@ -463,7 +463,7 @@ const PayAsYouGoSection = ({ t }) => {
               key={idx}
               whileHover={{ y: -5 }}
               className={cn(
-                'relative bg-white dark:bg-zinc-800 rounded-3xl p-6 border transition-all duration-300 flex flex-col',
+                'relative bg-white dark:bg-zinc-800 rounded-3xl p-5 md:p-6 border transition-all duration-300 flex flex-col',
                 plan.tag === '最推荐'
                   ? 'border-purple-500/50 shadow-xl shadow-purple-500/10 ring-1 ring-purple-500/20'
                   : plan.tag === '最具性价比'
@@ -560,33 +560,33 @@ const PayAsYouGoSection = ({ t }) => {
 // ============ Quick Config / Terminal Section ============
 const QuickConfigSection = ({ t }) => {
   return (
-    <section id='quick-config' className='min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-6'>
+    <section id='quick-config' className='md:min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-4 md:px-6 py-12 md:py-0'>
       <div className='w-full max-w-6xl mx-auto'>
-      <div className='grid md:grid-cols-2 gap-12 items-center'>
+      <div className='grid md:grid-cols-2 gap-8 md:gap-12 items-center px-2'>
         <motion.div
           initial={{ opacity: 0, x: -30 }}
           whileInView={{ opacity: 1, x: 0 }}
           viewport={{ once: true }}
-          className='space-y-8'
+          className='space-y-6 md:space-y-8'
         >
-          <div className='inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium text-sm tracking-widest uppercase'>
+          <div className='inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 font-medium text-xs md:text-sm tracking-widest uppercase'>
             <TerminalSquare className='w-4 h-4' /> Terminal Ready
           </div>
           <h2 className='text-3xl md:text-4xl font-bold text-slate-900 dark:text-white'>
             {t('1秒配置，光速开始编码')}
           </h2>
-          <p className='text-slate-500 dark:text-zinc-400 text-lg leading-relaxed'>
+          <p className='text-slate-500 dark:text-zinc-400 text-base md:text-lg leading-relaxed'>
             {t(
               '兼容所有标准的 OpenAI 及 Anthropic API 格式客户端。支持 Cursor, Cline, AutoGPT, LangChain 等众多主流工具与框架。',
             )}
           </p>
-          <div className='flex gap-4'>
-            <Link to='/console'>
-              <button className='px-6 py-3 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-medium hover:bg-slate-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2'>
+          <div className='flex flex-col sm:flex-row gap-3 md:gap-4'>
+            <Link to='/console' className='w-full sm:w-auto'>
+              <button className='px-6 py-3 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-medium hover:bg-slate-800 dark:hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 w-full sm:w-auto'>
                 {t('快速接入')} <ChevronRight className='w-4 h-4' />
               </button>
             </Link>
-            <button className='px-6 py-3 rounded-full bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 font-medium hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors'>
+            <button className='px-6 py-3 rounded-full bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 font-medium hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors w-full sm:w-auto'>
               {t('浏览文档')}
             </button>
           </div>
@@ -596,7 +596,7 @@ const QuickConfigSection = ({ t }) => {
           initial={{ opacity: 0, scale: 0.95 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className='bg-white/60 dark:bg-zinc-800/60 backdrop-blur-xl border border-white/40 dark:border-zinc-700/40 shadow-2xl rounded-2xl p-6 font-mono text-sm overflow-hidden relative'
+          className='bg-white/60 dark:bg-zinc-800/60 backdrop-blur-xl border border-white/40 dark:border-zinc-700/40 shadow-2xl rounded-2xl p-4 md:p-6 font-mono text-xs md:text-sm overflow-x-auto relative w-full'
         >
           <div className='flex gap-2 mb-6 border-b border-slate-100 dark:border-zinc-700 pb-4'>
             <div className='w-3 h-3 rounded-full bg-red-400' />
@@ -645,32 +645,32 @@ const QuickConfigSection = ({ t }) => {
 // ============ Industry Solutions Bento Grid ============
 const IndustrySection = ({ t }) => {
   return (
-    <section id='industry' className='min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-6 py-12 overflow-y-auto'>
+    <section id='industry' className='md:min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-4 md:px-6 py-12 md:overflow-y-auto'>
       <div className='w-full max-w-6xl mx-auto'>
       {/* Section Header */}
-      <div className='text-center mb-20 flex flex-col items-center relative'>
-        <div className='absolute top-10 left-1/2 -translate-x-1/2 w-full max-w-2xl h-32 bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 blur-[80px] -z-10 pointer-events-none' />
+      <div className='text-center mb-12 md:mb-20 flex flex-col items-center relative px-2'>
+        <div className='absolute top-10 left-1/2 -translate-x-1/2 w-[150%] md:w-full max-w-2xl h-32 bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 blur-[60px] md:blur-[80px] -z-10 pointer-events-none' />
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className='flex items-center justify-center gap-4 mb-8'
+          className='flex items-center justify-center gap-3 md:gap-4 mb-6 md:mb-8'
         >
-          <div className='h-[2px] w-12 md:w-24 bg-gradient-to-r from-transparent to-orange-400/50 rounded-full' />
-          <div className='w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-400 via-pink-500 to-purple-500 p-[2px] shadow-xl shadow-orange-500/20'>
+          <div className='h-[2px] w-8 md:w-24 bg-gradient-to-r from-transparent to-orange-400/50 rounded-full' />
+          <div className='w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-orange-400 via-pink-500 to-purple-500 p-[2px] shadow-xl shadow-orange-500/20 shrink-0'>
             <div className='w-full h-full bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm rounded-[14px] flex items-center justify-center'>
-              <Sparkles className='w-7 h-7 text-pink-500' />
+              <Sparkles className='w-5 h-5 md:w-7 md:h-7 text-pink-500' />
             </div>
           </div>
-          <div className='h-[2px] w-12 md:w-24 bg-gradient-to-l from-transparent to-purple-400/50 rounded-full' />
+          <div className='h-[2px] w-8 md:w-24 bg-gradient-to-l from-transparent to-purple-400/50 rounded-full' />
         </motion.div>
 
         <motion.h2
           initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className='text-4xl md:text-5xl font-black mb-6 tracking-tight leading-tight flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4'
+          className='text-3xl md:text-5xl font-black mb-4 md:mb-6 tracking-tight leading-tight flex flex-col md:flex-row items-center justify-center gap-1 md:gap-4'
         >
           <span className='text-transparent bg-clip-text bg-gradient-to-r from-orange-600 via-pink-500 to-purple-600 pb-1'>
             {t('行业落地案例')}
@@ -687,14 +687,14 @@ const IndustrySection = ({ t }) => {
           initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className='text-2xl md:text-4xl font-bold text-slate-800 dark:text-zinc-200 mb-8 flex flex-wrap items-center justify-center gap-x-2 gap-y-4'
+          className='text-xl md:text-4xl font-bold text-slate-800 dark:text-zinc-200 mb-6 md:mb-8 flex flex-wrap items-center justify-center gap-x-2 gap-y-3'
         >
           {t('进入人工智能时代，一定要养')}{' '}
-          <span className='relative inline-block ml-1'>
-            <span className='relative z-10 text-white px-4 py-1.5 font-black tracking-wide'>
+          <span className='relative inline-block ml-0.5 md:ml-1 mt-1 md:mt-0'>
+            <span className='relative z-10 text-white px-3 py-1 md:px-4 md:py-1.5 font-black tracking-wide whitespace-nowrap'>
               "星云龙虾"
             </span>
-            <span className='absolute inset-0 bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 rounded-xl shadow-lg shadow-pink-500/30 -z-0 rotate-[-2deg] scale-105' />
+            <span className='absolute inset-0 bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 rounded-xl shadow-lg shadow-pink-500/30 -z-0 rotate-[-2deg] scale-[1.02] md:scale-105' />
           </span>
         </motion.div>
 
@@ -702,7 +702,7 @@ const IndustrySection = ({ t }) => {
           initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className='text-slate-600 dark:text-zinc-400 text-lg md:text-xl max-w-3xl leading-relaxed mb-6'
+          className='text-slate-600 dark:text-zinc-400 text-base md:text-xl max-w-3xl leading-relaxed mb-4 md:mb-6'
         >
           {t('基于最先进的')}{' '}
           <strong className='text-slate-900 dark:text-white'>
@@ -719,30 +719,31 @@ const IndustrySection = ({ t }) => {
       </div>
 
       {/* Bento Grid */}
-      <div className='grid grid-cols-1 md:grid-cols-12 gap-6 auto-rows-[minmax(180px,auto)]'>
+      <div className='grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 auto-rows-[minmax(180px,auto)] px-2 md:px-0'>
         {/* 行程定制 (Span 8) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
+          whileHover={{ scale: 1.02 }}
           viewport={{ once: true }}
-          className='md:col-span-8 bg-white dark:bg-zinc-800 rounded-3xl p-8 border border-slate-200/60 dark:border-zinc-700/60 shadow-xl shadow-slate-200/40 dark:shadow-black/20 relative overflow-hidden group hover:border-purple-500/30 transition-colors'
+          className='md:col-span-8 bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border border-slate-200/60 dark:border-zinc-700/60 shadow-xl shadow-slate-200/40 dark:shadow-black/20 relative overflow-hidden group hover:border-purple-500/30 transition-colors'
         >
-          <div className='absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity'>
-            <Map className='w-32 h-32' />
+          <div className='absolute top-0 right-0 p-6 md:p-8 opacity-5 group-hover:opacity-10 transition-opacity'>
+            <Map className='w-24 h-24 md:w-32 md:h-32' />
           </div>
           <div className='relative z-10 h-full flex flex-col justify-center'>
-            <div className='flex items-center gap-3 mb-6'>
+            <div className='flex items-center gap-3 mb-5 md:mb-6'>
               <div className='w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center'>
                 <Map className='w-5 h-5' />
               </div>
-              <h3 className='text-2xl font-bold text-slate-900 dark:text-white'>
+              <h3 className='text-xl md:text-2xl font-bold text-slate-900 dark:text-white'>
                 {t('超级行程定制')}
               </h3>
             </div>
-            <div className='grid sm:grid-cols-2 gap-4'>
+            <div className='grid sm:grid-cols-2 gap-3 md:gap-4'>
               <div className='bg-slate-50 dark:bg-zinc-900 rounded-2xl p-4 flex items-start gap-3'>
                 <Globe className='w-5 h-5 text-blue-500 shrink-0 mt-0.5' />
-                <p className='text-slate-700 dark:text-zinc-300 font-medium'>
+                <p className='text-sm md:text-base text-slate-700 dark:text-zinc-300 font-medium'>
                   {t('全球任何国家')}{' '}
                   <span className='text-blue-600 dark:text-blue-400 font-bold'>
                     5{t('分钟')}
@@ -752,7 +753,7 @@ const IndustrySection = ({ t }) => {
               </div>
               <div className='bg-slate-50 dark:bg-zinc-900 rounded-2xl p-4 flex items-start gap-3'>
                 <FileText className='w-5 h-5 text-purple-500 shrink-0 mt-0.5' />
-                <p className='text-slate-700 dark:text-zinc-300 font-medium'>
+                <p className='text-sm md:text-base text-slate-700 dark:text-zinc-300 font-medium'>
                   <span className='text-purple-600 dark:text-purple-400 font-bold'>
                     5{t('分钟')}
                   </span>{' '}
@@ -761,7 +762,7 @@ const IndustrySection = ({ t }) => {
               </div>
               <div className='bg-slate-50 dark:bg-zinc-900 rounded-2xl p-4 flex items-start gap-3 sm:col-span-2'>
                 <DollarSign className='w-5 h-5 text-emerald-500 shrink-0 mt-0.5' />
-                <p className='text-slate-700 dark:text-zinc-300 font-medium'>
+                <p className='text-sm md:text-base text-slate-700 dark:text-zinc-300 font-medium'>
                   <span className='text-emerald-600 dark:text-emerald-400 font-bold'>
                     5{t('分钟')}
                   </span>{' '}
@@ -776,37 +777,38 @@ const IndustrySection = ({ t }) => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
+          whileHover={{ scale: 1.02 }}
           viewport={{ once: true }}
-          className='md:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-zinc-900 dark:to-zinc-800 text-white rounded-3xl p-8 shadow-xl relative overflow-hidden'
+          className='md:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-zinc-900 dark:to-zinc-800 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden'
         >
           <div className='absolute -right-4 -bottom-4 opacity-10'>
-            <RefreshCcw className='w-40 h-40' />
+            <RefreshCcw className='w-32 h-32 md:w-40 md:h-40' />
           </div>
           <div className='relative z-10 h-full flex flex-col'>
-            <div className='flex items-center gap-3 mb-6'>
-              <div className='w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center'>
+            <div className='flex items-center gap-3 mb-5 md:mb-6'>
+              <div className='w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0'>
                 <Box className='w-5 h-5 text-white' />
               </div>
-              <h3 className='text-2xl font-bold'>
+              <h3 className='text-xl md:text-2xl font-bold'>
                 {t('全平台产品自动化')}
               </h3>
             </div>
-            <ul className='space-y-4 flex-1'>
+            <ul className='space-y-3 md:space-y-4 flex-1'>
               <li className='flex items-start gap-3'>
                 <Check className='w-5 h-5 text-emerald-400 shrink-0 mt-0.5' />
-                <span className='text-slate-300'>
+                <span className='text-sm md:text-base text-slate-300'>
                   {t('自动录入飞猪、携程、途牛产品')}
                 </span>
               </li>
               <li className='flex items-start gap-3'>
                 <Check className='w-5 h-5 text-emerald-400 shrink-0 mt-0.5' />
-                <span className='text-slate-300'>
+                <span className='text-sm md:text-base text-slate-300'>
                   {t('自动录入独立站产品与行程')}
                 </span>
               </li>
               <li className='flex items-start gap-3'>
                 <Check className='w-5 h-5 text-emerald-400 shrink-0 mt-0.5' />
-                <span className='text-slate-300'>
+                <span className='text-sm md:text-base text-slate-300'>
                   {t('自动录入 Viator, GetYourGuide, Trip.com 等')}
                 </span>
               </li>
@@ -818,25 +820,26 @@ const IndustrySection = ({ t }) => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
+          whileHover={{ scale: 1.02 }}
           viewport={{ once: true }}
-          className='md:col-span-5 bg-white dark:bg-zinc-800 rounded-3xl p-8 border border-slate-200/60 dark:border-zinc-700/60 shadow-xl shadow-slate-200/40 dark:shadow-black/20 relative overflow-hidden group hover:border-pink-500/30 transition-colors'
+          className='md:col-span-5 bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border border-slate-200/60 dark:border-zinc-700/60 shadow-xl shadow-slate-200/40 dark:shadow-black/20 relative overflow-hidden group hover:border-pink-500/30 transition-colors'
         >
-          <div className='flex items-center gap-3 mb-6'>
-            <div className='w-10 h-10 rounded-xl bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 flex items-center justify-center'>
+          <div className='flex items-center gap-3 mb-5 md:mb-6'>
+            <div className='w-10 h-10 rounded-xl bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0'>
               <MessageCircle className='w-5 h-5' />
             </div>
-            <h3 className='text-2xl font-bold text-slate-900 dark:text-white'>
+            <h3 className='text-xl md:text-2xl font-bold text-slate-900 dark:text-white'>
               {t('智能客服与销售')}
             </h3>
           </div>
-          <div className='space-y-4'>
+          <div className='space-y-3 md:space-y-4'>
             <div className='flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors'>
               <Bot className='w-5 h-5 text-pink-500 shrink-0 mt-0.5' />
               <div>
-                <div className='font-bold text-slate-800 dark:text-zinc-200 mb-1'>
+                <div className='text-sm md:text-base font-bold text-slate-800 dark:text-zinc-200 mb-1'>
                   {t('多平台全自动回复')}
                 </div>
-                <p className='text-sm text-slate-500 dark:text-zinc-400'>
+                <p className='text-xs md:text-sm text-slate-500 dark:text-zinc-400'>
                   {t('毫秒级自动回复千牛、携程、小红书等线上平台咨询')}
                 </p>
               </div>
@@ -844,10 +847,10 @@ const IndustrySection = ({ t }) => {
             <div className='flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors'>
               <Smartphone className='w-5 h-5 text-green-500 shrink-0 mt-0.5' />
               <div>
-                <div className='font-bold text-slate-800 dark:text-zinc-200 mb-1'>
+                <div className='text-sm md:text-base font-bold text-slate-800 dark:text-zinc-200 mb-1'>
                   {t('微信私域管家')}
                 </div>
-                <p className='text-sm text-slate-500 dark:text-zinc-400'>
+                <p className='text-xs md:text-sm text-slate-500 dark:text-zinc-400'>
                   {t('智能回复微信顾客咨询，24小时不间断')}
                 </p>
               </div>
@@ -855,10 +858,10 @@ const IndustrySection = ({ t }) => {
             <div className='flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors'>
               <ShieldCheck className='w-5 h-5 text-blue-500 shrink-0 mt-0.5' />
               <div>
-                <div className='font-bold text-slate-800 dark:text-zinc-200 mb-1'>
+                <div className='text-sm md:text-base font-bold text-slate-800 dark:text-zinc-200 mb-1'>
                   {t('行中智能监控')}
                 </div>
-                <p className='text-sm text-slate-500 dark:text-zinc-400'>
+                <p className='text-xs md:text-sm text-slate-500 dark:text-zinc-400'>
                   {t('实时自动监控并回复微信客服服务群，保障服务质量')}
                 </p>
               </div>
@@ -870,32 +873,33 @@ const IndustrySection = ({ t }) => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
+          whileHover={{ scale: 1.02 }}
           viewport={{ once: true }}
-          className='md:col-span-4 bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/10 rounded-3xl p-8 border border-orange-200/50 dark:border-orange-800/30 shadow-xl shadow-orange-500/10 relative overflow-hidden'
+          className='md:col-span-4 bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/10 rounded-3xl p-6 md:p-8 border border-orange-200/50 dark:border-orange-800/30 shadow-xl shadow-orange-500/10 relative overflow-hidden'
         >
           <div className='absolute -right-6 -top-6 opacity-20'>
-            <Megaphone className='w-32 h-32 text-orange-500' />
+            <Megaphone className='w-24 h-24 md:w-32 md:h-32 text-orange-500' />
           </div>
-          <div className='flex items-center gap-3 mb-6 relative z-10'>
-            <div className='w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/30'>
+          <div className='flex items-center gap-3 mb-5 md:mb-6 relative z-10'>
+            <div className='w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/30 shrink-0'>
               <Megaphone className='w-5 h-5' />
             </div>
-            <h3 className='text-2xl font-bold text-slate-900 dark:text-white'>
+            <h3 className='text-xl md:text-2xl font-bold text-slate-900 dark:text-white'>
               {t('内容与市场')}
             </h3>
           </div>
-          <div className='bg-white/60 dark:bg-zinc-800/60 backdrop-blur-md rounded-2xl p-5 border border-white dark:border-zinc-700 relative z-10'>
-            <p className='text-slate-700 dark:text-zinc-300 font-medium leading-relaxed'>
+          <div className='bg-white/60 dark:bg-zinc-800/60 backdrop-blur-md rounded-2xl p-4 md:p-5 border border-white dark:border-zinc-700 relative z-10'>
+            <p className='text-sm md:text-base text-slate-700 dark:text-zinc-300 font-medium leading-relaxed'>
               {t('打破内容生产瓶颈，一键批量根据产品生成高质量的：')}
             </p>
             <div className='mt-4 flex flex-wrap gap-2'>
-              <span className='px-3 py-1.5 bg-white dark:bg-zinc-800 rounded-lg shadow-sm text-sm font-bold text-red-500'>
+              <span className='px-2 py-1 md:px-3 md:py-1.5 bg-white dark:bg-zinc-800 rounded-lg shadow-sm text-xs md:text-sm font-bold text-red-500'>
                 {t('小红书图文')}
               </span>
-              <span className='px-3 py-1.5 bg-white dark:bg-zinc-800 rounded-lg shadow-sm text-sm font-bold text-green-600'>
+              <span className='px-2 py-1 md:px-3 md:py-1.5 bg-white dark:bg-zinc-800 rounded-lg shadow-sm text-xs md:text-sm font-bold text-green-600'>
                 {t('公众号爆款')}
               </span>
-              <span className='px-3 py-1.5 bg-white dark:bg-zinc-800 rounded-lg shadow-sm text-sm font-bold text-slate-900 dark:text-white'>
+              <span className='px-2 py-1 md:px-3 md:py-1.5 bg-white dark:bg-zinc-800 rounded-lg shadow-sm text-xs md:text-sm font-bold text-slate-900 dark:text-white'>
                 {t('抖音文案')}
               </span>
             </div>
@@ -906,30 +910,31 @@ const IndustrySection = ({ t }) => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
+          whileHover={{ scale: 1.02 }}
           viewport={{ once: true }}
-          className='md:col-span-3 bg-white dark:bg-zinc-800 rounded-3xl p-8 border border-slate-200/60 dark:border-zinc-700/60 shadow-xl shadow-slate-200/40 dark:shadow-black/20 relative overflow-hidden group hover:border-indigo-500/30 transition-colors'
+          className='md:col-span-3 bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border border-slate-200/60 dark:border-zinc-700/60 shadow-xl shadow-slate-200/40 dark:shadow-black/20 relative overflow-hidden group hover:border-indigo-500/30 transition-colors'
         >
-          <div className='flex items-center gap-3 mb-6'>
-            <div className='w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center'>
+          <div className='flex items-center gap-3 mb-5 md:mb-6'>
+            <div className='w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0'>
               <Users className='w-5 h-5' />
             </div>
             <h3 className='text-xl font-bold text-slate-900 dark:text-white'>
               {t('智能供应商')}
             </h3>
           </div>
-          <p className='text-slate-600 dark:text-zinc-400 mb-6 text-sm leading-relaxed'>
+          <p className='text-slate-600 dark:text-zinc-400 mb-5 md:mb-6 text-sm leading-relaxed'>
             {t('化身金牌采购，主动出击寻找全球优质资源。')}
           </p>
           <div className='space-y-3 mt-auto'>
-            <div className='flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 px-3 py-2 rounded-lg'>
+            <div className='flex items-center gap-2 text-xs md:text-sm font-medium text-slate-700 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 px-3 py-2.5 md:py-2 rounded-lg'>
               <Mail className='w-4 h-4 text-indigo-500 shrink-0' /> WhatsApp &
               Email {t('寻源')}
             </div>
-            <div className='flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 px-3 py-2 rounded-lg'>
+            <div className='flex items-center gap-2 text-xs md:text-sm font-medium text-slate-700 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 px-3 py-2.5 md:py-2 rounded-lg'>
               <Bot className='w-4 h-4 text-indigo-500 shrink-0' />{' '}
               {t('高效拟人全自动沟通')}
             </div>
-            <div className='flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 px-3 py-2 rounded-lg'>
+            <div className='flex items-center gap-2 text-xs md:text-sm font-medium text-slate-700 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-900 px-3 py-2.5 md:py-2 rounded-lg'>
               <DollarSign className='w-4 h-4 text-indigo-500 shrink-0' />{' '}
               {t('自动咨询与比对报价')}
             </div>
@@ -1069,7 +1074,7 @@ const Home = () => {
           {/* Scroll Snap Container */}
           <div
             ref={snapContainerRef}
-            className='h-[calc(100vh-64px)] overflow-y-auto scroll-snap-container bg-[#FAFAFA] dark:bg-zinc-950 text-slate-900 dark:text-white font-sans selection:bg-purple-500/30 relative'
+            className='md:h-[calc(100vh-64px)] md:overflow-y-auto scroll-snap-container bg-[#FAFAFA] dark:bg-zinc-950 text-slate-900 dark:text-white font-sans selection:bg-purple-500/30 relative'
           >
             {/* Background Grid */}
             <div className='fixed inset-0 z-0 pointer-events-none home-bg-grid' />
@@ -1084,6 +1089,14 @@ const Home = () => {
             <PayAsYouGoSection t={t} />
             <QuickConfigSection t={t} />
             <IndustrySection t={t} />
+
+            {/* Footer — desktop only (mobile uses PageLayout footer) */}
+            <footer className='hidden md:block w-full bg-white dark:bg-zinc-900 border-t border-slate-200 dark:border-zinc-800 py-8 px-6 text-sm text-slate-500 dark:text-zinc-400'>
+              <div className='max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4'>
+                <div>&copy; {new Date().getFullYear()} Nebula API. {t('版权所有')}</div>
+                <div>{t('设计与开发由')} <a href='https://github.com/xwzp/nebula-api' className='text-purple-600 dark:text-purple-400 font-medium hover:underline'>New API</a></div>
+              </div>
+            </footer>
           </div>
         </>
       ) : (
