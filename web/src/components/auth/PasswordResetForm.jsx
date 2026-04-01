@@ -20,12 +20,12 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useEffect, useState } from 'react';
 import {
   API,
-  getLogo,
   showError,
   showInfo,
   showSuccess,
   getSystemName,
 } from '../../helpers';
+import BrandLogo from '../logo/BrandLogo';
 import Turnstile from 'react-turnstile';
 import { Button, Card, Form, Typography } from '@douyinfe/semi-ui';
 import { IconMail } from '@douyinfe/semi-icons';
@@ -48,7 +48,6 @@ const PasswordResetForm = () => {
   const [disableButton, setDisableButton] = useState(false);
   const [countdown, setCountdown] = useState(30);
 
-  const logo = getLogo();
   const systemName = getSystemName();
 
   useEffect(() => {
@@ -118,7 +117,7 @@ const PasswordResetForm = () => {
         <div className='flex flex-col items-center'>
           <div className='w-full max-w-md'>
             <div className='flex items-center justify-center mb-6 gap-2'>
-              <img src={logo} alt='Logo' className='h-10 rounded-full' />
+              <BrandLogo size={40} />
               <Title heading={3} className='!text-gray-800'>
                 {systemName}
               </Title>

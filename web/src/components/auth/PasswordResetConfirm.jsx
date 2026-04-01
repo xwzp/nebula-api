@@ -23,9 +23,9 @@ import {
   copy,
   showError,
   showNotice,
-  getLogo,
   getSystemName,
 } from '../../helpers';
+import BrandLogo from '../logo/BrandLogo';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Button, Card, Form, Typography, Banner } from '@douyinfe/semi-ui';
 import { IconMail, IconLock, IconCopy } from '@douyinfe/semi-icons';
@@ -49,7 +49,6 @@ const PasswordResetConfirm = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [formApi, setFormApi] = useState(null);
 
-  const logo = getLogo();
   const systemName = getSystemName();
 
   useEffect(() => {
@@ -118,7 +117,7 @@ const PasswordResetConfirm = () => {
         <div className='flex flex-col items-center'>
           <div className='w-full max-w-md'>
             <div className='flex items-center justify-center mb-6 gap-2'>
-              <img src={logo} alt='Logo' className='h-10 rounded-full' />
+              <BrandLogo size={40} />
               <Title heading={3} className='!text-gray-800'>
                 {systemName}
               </Title>
