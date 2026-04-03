@@ -1029,6 +1029,8 @@ const TopUp = () => {
           activeSubscriptions={activeSubscriptions}
           allSubscriptions={allSubscriptions}
           reloadSubscriptionSelf={getSubscriptionSelf}
+          searchParams={searchParams}
+          setSearchParams={setSearchParams}
         />
         <InvitationCard
           t={t}

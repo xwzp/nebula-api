@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
@@ -34,6 +34,7 @@ import { API, showError, showSuccess, renderQuota } from '../../helpers';
 import { getCurrencyConfig } from '../../helpers/render';
 import { RefreshCw, Sparkles } from 'lucide-react';
 import SubscriptionPurchaseModal from './modals/SubscriptionPurchaseModal';
+import ScanPayModal from './modals/WechatPayModal';
 import {
   formatSubscriptionDuration,
   formatSubscriptionResetPeriod,
@@ -69,6 +70,12 @@ function submitEpayForm({ url, params }) {
   document.body.removeChild(form);
 }
 
+function getPaymentError(res, t) {
+  return typeof res.data?.data === 'string'
+    ? res.data.data
+    : res.data?.message || t('支付失败');
+}
+
 const SubscriptionPlansCard = ({
   t,
   loading = false,
@@ -77,12 +84,15 @@ const SubscriptionPlansCard = ({
   enableOnlineTopUp = false,
   enableStripeTopUp = false,
   enableCreemTopUp = false,
+  enableWechatTopUp = false,
+  enableAlipayTopUp = false,
   billingPreference,
   onChangeBillingPreference,
   activeSubscriptions = [],
   allSubscriptions = [],
   reloadSubscriptionSelf,
   withCard = true,
+  defaultOpenPlanId = null,
 }) => {
   const [open, setOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -90,7 +100,20 @@ const SubscriptionPlansCard = ({
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
+  const [scanPayData, setScanPayData] = useState(null);
+
   const epayMethods = useMemo(() => getEpayMethods(payMethods), [payMethods]);
+
+  const defaultOpenHandledRef = useRef(null);
+  useEffect(() => {
+    if (!defaultOpenPlanId || loading || plans.length === 0) return;
+    if (defaultOpenHandledRef.current === defaultOpenPlanId) return;
+    defaultOpenHandledRef.current = defaultOpenPlanId;
+    const targetPlan = plans.find((p) => p?.plan?.id === defaultOpenPlanId);
+    if (targetPlan) {
+      openBuy(targetPlan);
+    }
+  }, [defaultOpenPlanId, loading, plans]);
 
   const openBuy = (p) => {
     setSelectedPlan(p);
@@ -128,11 +151,7 @@ const SubscriptionPlansCard = ({
         showSuccess(t('已打开支付页面'));
         closeBuy();
       } else {
-        const errorMsg =
-          typeof res.data?.data === 'string'
-            ? res.data.data
-            : res.data?.message || t('支付失败');
-        showError(errorMsg);
+        showError(getPaymentError(res, t));
       }
     } catch (e) {
       showError(t('支付请求失败'));
@@ -156,11 +175,7 @@ const SubscriptionPlansCard = ({
         showSuccess(t('已打开支付页面'));
         closeBuy();
       } else {
-        const errorMsg =
-          typeof res.data?.data === 'string'
-            ? res.data.data
-            : res.data?.message || t('支付失败');
-        showError(errorMsg);
+        showError(getPaymentError(res, t));
       }
     } catch (e) {
       showError(t('支付请求失败'));
@@ -185,11 +200,30 @@ const SubscriptionPlansCard = ({
         showSuccess(t('已发起支付'));
         closeBuy();
       } else {
-        const errorMsg =
-          typeof res.data?.data === 'string'
-            ? res.data.data
-            : res.data?.message || t('支付失败');
-        showError(errorMsg);
+        showError(getPaymentError(res, t));
+      }
+    } catch (e) {
+      showError(t('支付请求失败'));
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const payScanMethod = async (method) => {
+    setPaying(true);
+    try {
+      const res = await API.post(`/api/subscription/${method}/pay`, {
+        plan_id: selectedPlan.plan.id,
+      });
+      if (res.data?.message === 'success' && res.data.data?.code_url) {
+        closeBuy();
+        setScanPayData({
+          method,
+          codeUrl: res.data.data.code_url,
+          money: res.data.data.pay_money || 0,
+        });
+      } else {
+        showError(getPaymentError(res, t));
       }
     } catch (e) {
       showError(t('支付请求失败'));
@@ -665,6 +699,8 @@ const SubscriptionPlansCard = ({
         enableOnlineTopUp={enableOnlineTopUp}
         enableStripeTopUp={enableStripeTopUp}
         enableCreemTopUp={enableCreemTopUp}
+        enableWechatTopUp={enableWechatTopUp}
+        enableAlipayTopUp={enableAlipayTopUp}
         purchaseLimitInfo={
           selectedPlan?.plan?.id
             ? {
@@ -676,6 +712,18 @@ const SubscriptionPlansCard = ({
         onPayStripe={payStripe}
         onPayCreem={payCreem}
         onPayEpay={payEpay}
+        onPayWechat={() => payScanMethod('wechat')}
+        onPayAlipay={() => payScanMethod('alipay')}
+      />
+
+      {/* 微信/支付宝扫码支付弹窗 */}
+      <ScanPayModal
+        visible={!!scanPayData}
+        onCancel={() => setScanPayData(null)}
+        codeUrl={scanPayData?.codeUrl || ''}
+        payMoney={scanPayData?.money || 0}
+        topUpCount={0}
+        paymentMethod={scanPayData?.method || 'wechat'}
       />
     </>
   );

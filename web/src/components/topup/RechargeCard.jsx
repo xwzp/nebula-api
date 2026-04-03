@@ -27,6 +27,7 @@ import {
   Banner,
   Skeleton,
   Form,
+  InputNumber,
   Space,
   Row,
   Col,
@@ -103,8 +104,9 @@ const RechargeCard = ({
   activeSubscriptions = [],
   allSubscriptions = [],
   reloadSubscriptionSelf,
+  searchParams,
+  setSearchParams,
 }) => {
-  const onlineFormApiRef = useRef(null);
   const redeemFormApiRef = useRef(null);
   const initialTabSetRef = useRef(false);
   const showAmountSkeleton = useMinimumLoadingTime(amountLoading);
@@ -112,10 +114,40 @@ const RechargeCard = ({
   const shouldShowSubscription =
     !subscriptionLoading && subscriptionPlans.length > 0;
 
+  // Capture URL params once on mount via lazy initializer (runs only on first render).
+  // Each concern (tab, amount, plan_id) is handled by its own effect when data is ready.
+  const [urlParams] = useState(() => {
+    const tab = searchParams?.get('tab');
+    const planId = searchParams?.get('plan_id');
+    const amount = searchParams?.get('amount');
+    if (!tab && !planId && !amount) return null;
+    return { tab, planId: planId ? parseInt(planId, 10) : null, amount: amount ? parseFloat(amount) : null };
+  });
+
+  // Clean URL params on mount
+  useEffect(() => {
+    if (!urlParams) return;
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('tab');
+    newParams.delete('plan_id');
+    newParams.delete('amount');
+    setSearchParams(newParams, { replace: true });
+  }, []);
+
+  // Default tab selection (when no URL params override it)
   useEffect(() => {
     if (initialTabSetRef.current) return;
     if (subscriptionLoading) return;
-    setActiveTab(shouldShowSubscription ? 'subscription' : 'topup');
+    if (urlParams?.tab) {
+      // URL params take precedence — set tab based on URL
+      if (urlParams.tab === 'subscription' && shouldShowSubscription) {
+        setActiveTab('subscription');
+      } else {
+        setActiveTab('topup');
+      }
+    } else {
+      setActiveTab(shouldShowSubscription ? 'subscription' : 'topup');
+    }
     initialTabSetRef.current = true;
   }, [shouldShowSubscription, subscriptionLoading]);
 
@@ -124,6 +156,28 @@ const RechargeCard = ({
       setActiveTab('topup');
     }
   }, [shouldShowSubscription, activeTab]);
+
+  // Handle plan_id pre-selection: open subscription purchase modal when data is ready
+  const [defaultOpenPlanId, setDefaultOpenPlanId] = useState(null);
+  const planIdHandledRef = useRef(false);
+  useEffect(() => {
+    if (!urlParams?.planId || planIdHandledRef.current) return;
+    if (subscriptionLoading || subscriptionPlans.length === 0) return;
+    planIdHandledRef.current = true;
+    setDefaultOpenPlanId(urlParams.planId);
+  }, [subscriptionLoading, subscriptionPlans]);
+
+  // Handle amount pre-selection: select preset when presetAmounts is ready
+  const amountHandledRef = useRef(false);
+  useEffect(() => {
+    if (!urlParams?.amount || amountHandledRef.current) return;
+    if (presetAmounts.length === 0) return;
+    amountHandledRef.current = true;
+    const targetPreset = presetAmounts.find((p) => Number(p.value) === urlParams.amount);
+    if (targetPreset) {
+      selectPresetAmount(targetPreset);
+    }
+  }, [presetAmounts]);
   const topupContent = (
     <Space vertical style={{ width: '100%' }}>
       {/* 统计数据 */}
@@ -234,75 +288,70 @@ const RechargeCard = ({
             <Spin size='large' />
           </div>
         ) : enableOnlineTopUp || enableStripeTopUp || enableCreemTopUp || enableWaffoTopUp || enableWechatTopUp || enableAlipayTopUp ? (
-          <Form
-            getFormApi={(api) => (onlineFormApiRef.current = api)}
-            initValues={{ topUpCount: topUpCount }}
-          >
+          <Form>
             <div className='space-y-6'>
               {(enableOnlineTopUp || enableStripeTopUp || enableWaffoTopUp || enableWechatTopUp) && (
                 <Row gutter={12}>
                   <Col xs={24} sm={24} md={24} lg={10} xl={10}>
-                    <Form.InputNumber
-                      field='topUpCount'
-                      label={t('充值数量')}
-                      disabled={!enableOnlineTopUp && !enableStripeTopUp && !enableWaffoTopUp && !enableWechatTopUp && !enableAlipayTopUp}
-                      placeholder={
-                        t('充值数量，最低 ') + renderQuotaWithAmount(minTopUp)
-                      }
-                      value={topUpCount}
-                      min={minTopUp}
-                      max={999999999}
-                      step={1}
-                      precision={0}
-                      onChange={async (value) => {
-                        if (value && value >= 1) {
-                          setTopUpCount(value);
-                          setSelectedPreset(null);
-                          await getAmount(value);
+                    <Form.Slot label={t('充值数量')}>
+                      <InputNumber
+                        disabled={!enableOnlineTopUp && !enableStripeTopUp && !enableWaffoTopUp && !enableWechatTopUp && !enableAlipayTopUp}
+                        placeholder={
+                          t('充值数量，最低 ') + renderQuotaWithAmount(minTopUp)
                         }
-                      }}
-                      onBlur={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (!value || value < 1) {
-                          setTopUpCount(1);
-                          getAmount(1);
-                        }
-                      }}
-                      formatter={(value) => (value ? `${value}` : '')}
-                      parser={(value) =>
-                        value ? parseInt(value.replace(/[^\d]/g, '')) : 0
-                      }
-                      extraText={
-                        <Skeleton
-                          loading={showAmountSkeleton}
-                          active
-                          placeholder={
-                            <Skeleton.Title
-                              style={{
-                                width: 120,
-                                height: 20,
-                                borderRadius: 6,
-                              }}
-                            />
+                        value={topUpCount}
+                        min={minTopUp}
+                        max={999999999}
+                        step={1}
+                        precision={0}
+                        onChange={async (value) => {
+                          if (value && value >= 1) {
+                            setTopUpCount(value);
+                            setSelectedPreset(null);
+                            await getAmount(value);
                           }
-                        >
-                          <Text type='secondary' className='text-red-600'>
-                            {t('实付金额：')}
-                            <span style={{ color: 'red' }}>
-                              {renderAmount()}
-                            </span>
-                          </Text>
-                          <br />
-                          <Text type='secondary' className='text-red-600'>
-                            {t('到账 token：')}
-                            <span style={{ color: 'red' }}>
-                              {renderNumber(renderUnitWithQuota(topUpCount))}
-                            </span>
-                          </Text>
-                        </Skeleton>
-                      }
-                      style={{ width: '100%' }}
-                    />
+                        }}
+                        onBlur={(e) => {
+                          const value = parseInt(e.target.value);
+                          if (!value || value < 1) {
+                            setTopUpCount(1);
+                            getAmount(1);
+                          }
+                        }}
+                        formatter={(value) => (value ? `${value}` : '')}
+                        parser={(value) =>
+                          value ? parseInt(value.replace(/[^\d]/g, '')) : 0
+                        }
+                        style={{ width: '100%' }}
+                      />
+                      <Skeleton
+                        loading={showAmountSkeleton}
+                        active
+                        placeholder={
+                          <Skeleton.Title
+                            style={{
+                              width: 120,
+                              height: 20,
+                              borderRadius: 6,
+                            }}
+                          />
+                        }
+                      >
+                        <Text type='secondary' className='text-red-600'>
+                          {t('实付金额：')}
+                          <span style={{ color: 'red' }}>
+                            {renderAmount()}
+                          </span>
+                        </Text>
+                        <br />
+                        <Text type='secondary' className='text-red-600'>
+                          {t('到账 token：')}
+                          <span style={{ color: 'red' }}>
+                            {renderNumber(renderUnitWithQuota(topUpCount))}
+                          </span>
+                        </Text>
+                      </Skeleton>
+                    </Form.Slot>
                   </Col>
                   {payMethods && payMethods.filter(m => m.type !== 'waffo').length > 0 && (
                   <Col xs={24} sm={24} md={24} lg={14} xl={14}>
@@ -468,10 +517,6 @@ const RechargeCard = ({
                           bodyStyle={{ padding: '12px' }}
                           onClick={() => {
                             selectPresetAmount(preset);
-                            onlineFormApiRef.current?.setValue(
-                              'topUpCount',
-                              preset.value,
-                            );
                           }}
                         >
                           <div style={{ textAlign: 'center' }}>
@@ -690,12 +735,15 @@ const RechargeCard = ({
                 enableOnlineTopUp={enableOnlineTopUp}
                 enableStripeTopUp={enableStripeTopUp}
                 enableCreemTopUp={enableCreemTopUp}
+                enableWechatTopUp={enableWechatTopUp}
+                enableAlipayTopUp={enableAlipayTopUp}
                 billingPreference={billingPreference}
                 onChangeBillingPreference={onChangeBillingPreference}
                 activeSubscriptions={activeSubscriptions}
                 allSubscriptions={allSubscriptions}
                 reloadSubscriptionSelf={reloadSubscriptionSelf}
                 withCard={false}
+                defaultOpenPlanId={defaultOpenPlanId}
               />
             </div>
           </TabPane>

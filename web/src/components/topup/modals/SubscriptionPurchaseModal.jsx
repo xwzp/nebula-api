@@ -29,7 +29,7 @@ import {
   Tooltip,
 } from '@douyinfe/semi-ui';
 import { Crown, CalendarClock, Package } from 'lucide-react';
-import { SiStripe } from 'react-icons/si';
+import { SiStripe, SiWechat, SiAlipay } from 'react-icons/si';
 import { IconCreditCard } from '@douyinfe/semi-icons';
 import { renderQuota } from '../../../helpers';
 import { getCurrencyConfig } from '../../../helpers/render';
@@ -52,10 +52,14 @@ const SubscriptionPurchaseModal = ({
   enableOnlineTopUp = false,
   enableStripeTopUp = false,
   enableCreemTopUp = false,
+  enableWechatTopUp = false,
+  enableAlipayTopUp = false,
   purchaseLimitInfo = null,
   onPayStripe,
   onPayCreem,
   onPayEpay,
+  onPayWechat,
+  onPayAlipay,
 }) => {
   const plan = selectedPlan?.plan;
   const totalAmount = Number(plan?.total_amount || 0);
@@ -69,7 +73,9 @@ const SubscriptionPurchaseModal = ({
   const hasStripe = enableStripeTopUp && !!plan?.stripe_price_id;
   const hasCreem = enableCreemTopUp && !!plan?.creem_product_id;
   const hasEpay = enableOnlineTopUp && epayMethods.length > 0;
-  const hasAnyPayment = hasStripe || hasCreem || hasEpay;
+  const hasWechat = enableWechatTopUp;
+  const hasAlipay = enableAlipayTopUp;
+  const hasAnyPayment = hasStripe || hasCreem || hasEpay || hasWechat || hasAlipay;
   const purchaseLimit = Number(purchaseLimitInfo?.limit || 0);
   const purchaseCount = Number(purchaseLimitInfo?.count || 0);
   const purchaseLimitReached =
@@ -210,6 +216,36 @@ const SubscriptionPurchaseModal = ({
                       disabled={purchaseLimitReached}
                     >
                       Creem
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* WeChat / Alipay */}
+              {(hasWechat || hasAlipay) && (
+                <div className='flex gap-2'>
+                  {hasWechat && (
+                    <Button
+                      theme='light'
+                      className='flex-1'
+                      icon={<SiWechat size={14} color='#07C160' />}
+                      onClick={onPayWechat}
+                      loading={paying}
+                      disabled={purchaseLimitReached}
+                    >
+                      {t('微信支付')}
+                    </Button>
+                  )}
+                  {hasAlipay && (
+                    <Button
+                      theme='light'
+                      className='flex-1'
+                      icon={<SiAlipay size={14} color='#1677FF' />}
+                      onClick={onPayAlipay}
+                      loading={paying}
+                      disabled={purchaseLimitReached}
+                    >
+                      {t('支付宝')}
                     </Button>
                   )}
                 </div>

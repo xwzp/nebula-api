@@ -171,6 +171,16 @@ const LoginForm = () => {
     }
   }, []);
 
+  // Navigate to the redirect target after login, or default to /console
+  const navigateAfterLogin = () => {
+    const redirect = searchParams.get('redirect');
+    if (redirect && redirect.startsWith('/')) {
+      navigate(redirect);
+    } else {
+      navigate('/console');
+    }
+  };
+
   const onWeChatLoginClicked = () => {
     if ((hasUserAgreement || hasPrivacyPolicy) && !agreedToTerms) {
       showInfo(t('请先阅读并同意用户协议和隐私政策'));
@@ -254,7 +264,7 @@ const LoginForm = () => {
               centered: true,
             });
           }
-          navigate('/console');
+          navigateAfterLogin();
         } else {
           showError(message);
         }
@@ -455,7 +465,7 @@ const LoginForm = () => {
         setUserData(finish.data);
         updateAPI();
         showSuccess('登录成功！');
-        navigate('/console');
+        navigateAfterLogin();
       } else {
         showError(finish.message || 'Passkey 登录失败，请重试');
       }
@@ -490,7 +500,7 @@ const LoginForm = () => {
     setUserData(data);
     updateAPI();
     showSuccess('登录成功！');
-    navigate('/console');
+    navigateAfterLogin();
   };
 
   // 返回登录页面

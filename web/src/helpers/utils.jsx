@@ -124,12 +124,18 @@ export function showError(error) {
   if (error.message) {
     if (error.name === 'AxiosError') {
       switch (error.response.status) {
-        case 401:
+        case 401: {
           // 清除用户状态
           localStorage.removeItem('user');
-          // toast.error('错误：未登录或登录已过期，请重新登录！', showErrorOptions);
-          window.location.href = '/login?expired=true';
+          // Preserve current path as redirect target for post-login navigation
+          const currentPath = window.location.pathname + window.location.search;
+          const isLoginPage = window.location.pathname === '/login';
+          if (!isLoginPage) {
+            const redirectParam = currentPath && currentPath !== '/' ? `&redirect=${encodeURIComponent(currentPath)}` : '';
+            window.location.href = `/login?expired=true${redirectParam}`;
+          }
           break;
+        }
         case 429:
           Toast.error('错误：请求次数过多，请稍后再试！');
           break;
