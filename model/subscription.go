@@ -141,12 +141,10 @@ func InvalidateSubscriptionPlanCache(planId int) {
 	_ = infoCache.Purge()
 }
 
-// Subscription plan
+// Subscription plan (billing cycle variant under a SubscriptionPlanGroup)
 type SubscriptionPlan struct {
-	Id int `json:"id"`
-
-	Title    string `json:"title" gorm:"type:varchar(128);not null"`
-	Subtitle string `json:"subtitle" gorm:"type:varchar(255);default:''"`
+	Id      int `json:"id"`
+	GroupID int `json:"group_id" gorm:"not null;index"`
 
 	// Display money amount (follow existing code style: float64 for money)
 	PriceAmount float64 `json:"price_amount" gorm:"type:decimal(10,6);not null;default:0"`
@@ -372,6 +370,22 @@ func getSubscriptionPlanByIdTx(tx *gorm.DB, id int) (*SubscriptionPlan, error) {
 	return &plan, nil
 }
 
+func GetSubscriptionPlansByGroupID(groupID int) ([]SubscriptionPlan, error) {
+	var plans []SubscriptionPlan
+	if err := DB.Where("group_id = ?", groupID).Order("sort_order desc, id desc").Find(&plans).Error; err != nil {
+		return nil, err
+	}
+	return plans, nil
+}
+
+func GetEnabledSubscriptionPlansByGroupID(groupID int) ([]SubscriptionPlan, error) {
+	var plans []SubscriptionPlan
+	if err := DB.Where("group_id = ? AND enabled = ?", groupID, true).Order("sort_order desc, id desc").Find(&plans).Error; err != nil {
+		return nil, err
+	}
+	return plans, nil
+}
+
 func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	if userId <= 0 || planId <= 0 {
 		return 0, errors.New("invalid userId or planId")
@@ -553,7 +567,12 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string) error {
 			return err
 		}
 		logUserId = order.UserId
-		logPlanTitle = plan.Title
+		// Fetch group title for logging
+		if group, gErr := GetSubscriptionPlanGroupById(plan.GroupID); gErr == nil {
+			logPlanTitle = group.Title
+		} else {
+			logPlanTitle = fmt.Sprintf("Plan#%d", plan.Id)
+		}
 		logMoney = order.Money
 		logPaymentMethod = order.PaymentMethod
 		return nil
@@ -1148,20 +1167,22 @@ func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*Subsc
 	if cached, found, err := getSubscriptionPlanInfoCache().Get(cacheKey); err == nil && found {
 		return &cached, nil
 	}
-	var sub UserSubscription
-	if err := DB.Where("id = ?", userSubscriptionId).First(&sub).Error; err != nil {
-		return nil, err
-	}
-	plan, err := getSubscriptionPlanByIdTx(nil, sub.PlanId)
+
+	var result SubscriptionPlanInfo
+	err := DB.Table("user_subscriptions").
+		Select("subscription_plans.id as plan_id, subscription_plan_groups.title as plan_title").
+		Joins("JOIN subscription_plans ON subscription_plans.id = user_subscriptions.plan_id").
+		Joins("JOIN subscription_plan_groups ON subscription_plan_groups.id = subscription_plans.group_id").
+		Where("user_subscriptions.id = ?", userSubscriptionId).
+		Scan(&result).Error
 	if err != nil {
 		return nil, err
 	}
-	info := &SubscriptionPlanInfo{
-		PlanId:    sub.PlanId,
-		PlanTitle: plan.Title,
+	if result.PlanId == 0 {
+		return nil, errors.New("subscription plan info not found")
 	}
-	_ = getSubscriptionPlanInfoCache().SetWithTTL(cacheKey, *info, subscriptionPlanInfoCacheTTL())
-	return info, nil
+	_ = getSubscriptionPlanInfoCache().SetWithTTL(cacheKey, result, subscriptionPlanInfoCacheTTL())
+	return &result, nil
 }
 
 // Update subscription used amount by delta (positive consume more, negative refund).

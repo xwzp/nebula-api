@@ -168,8 +168,16 @@ func SetApiRouter(router *gin.Engine) {
 		subscriptionAdminRoute := apiRouter.Group("/subscription/admin")
 		subscriptionAdminRoute.Use(middleware.AdminAuth())
 		{
+			// Plan group management
+			subscriptionAdminRoute.GET("/groups", controller.AdminListSubscriptionPlanGroups)
+			subscriptionAdminRoute.POST("/groups", controller.AdminCreateSubscriptionPlanGroup)
+			subscriptionAdminRoute.PUT("/groups/:id", controller.AdminUpdateSubscriptionPlanGroup)
+			subscriptionAdminRoute.DELETE("/groups/:id", controller.AdminDeleteSubscriptionPlanGroup)
+			subscriptionAdminRoute.PATCH("/groups/:id", controller.AdminUpdateSubscriptionPlanGroupStatus)
+
+			// Plan variant management
+			subscriptionAdminRoute.POST("/groups/:id/plans", controller.AdminCreateSubscriptionPlan)
 			subscriptionAdminRoute.GET("/plans", controller.AdminListSubscriptionPlans)
-			subscriptionAdminRoute.POST("/plans", controller.AdminCreateSubscriptionPlan)
 			subscriptionAdminRoute.PUT("/plans/:id", controller.AdminUpdateSubscriptionPlan)
 			subscriptionAdminRoute.PATCH("/plans/:id", controller.AdminUpdateSubscriptionPlanStatus)
 			subscriptionAdminRoute.POST("/bind", controller.AdminBindSubscription)
@@ -179,6 +187,20 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionAdminRoute.POST("/users/:id/subscriptions", controller.AdminCreateUserSubscription)
 			subscriptionAdminRoute.POST("/user_subscriptions/:id/invalidate", controller.AdminInvalidateUserSubscription)
 			subscriptionAdminRoute.DELETE("/user_subscriptions/:id", controller.AdminDeleteUserSubscription)
+		}
+
+		// Topup tier - public (no auth)
+		apiRouter.GET("/topup/tiers", controller.GetPublicTopupTiers)
+
+		// Topup tier - admin
+		topupTierAdminRoute := apiRouter.Group("/topup/admin")
+		topupTierAdminRoute.Use(middleware.AdminAuth())
+		{
+			topupTierAdminRoute.GET("/tiers", controller.AdminListTopupTiers)
+			topupTierAdminRoute.POST("/tiers", controller.AdminCreateTopupTier)
+			topupTierAdminRoute.PUT("/tiers/:id", controller.AdminUpdateTopupTier)
+			topupTierAdminRoute.PATCH("/tiers/:id", controller.AdminUpdateTopupTierStatus)
+			topupTierAdminRoute.DELETE("/tiers/:id", controller.AdminDeleteTopupTier)
 		}
 
 		// Subscription payment callbacks (no auth)
