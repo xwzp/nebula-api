@@ -17,14 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { API, showError, copy, showSuccess } from '../../helpers';
+import React, { useContext, useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { API, showError, copy, showSuccess, renderQuota } from '../../helpers';
+import { getCurrencyConfig } from '../../helpers/render';
+import { formatSubscriptionDuration } from '../../helpers/subscriptionFormat';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import { StatusContext } from '../../context/Status';
 import { useActualTheme } from '../../context/Theme';
 import { marked } from 'marked';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -39,7 +41,7 @@ import {
   FileText,
   DollarSign,
   RefreshCcw,
-  Map,
+  Map as MapIcon,
   MessageCircle,
   Bot,
   ShieldCheck,
@@ -76,58 +78,8 @@ function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-// ============ Subscription Plans Data ============
-const SUBSCRIPTION_PLANS = [
-  {
-    name: 'Plus',
-    priceMonthly: 100,
-    priceYearly: 80,
-    descKey: '适合个人开发者与小微项目',
-    features: [
-      '500K Tokens/月',
-      '普通节点响应',
-      '基础售后支持',
-      '社区交流群',
-    ],
-  },
-  {
-    name: 'Pro',
-    priceMonthly: 200,
-    priceYearly: 160,
-    descKey: '适合专业团队与中型业务',
-    features: [
-      '1.5M Tokens/月',
-      '高速专线节点',
-      '优先工单响应',
-      '一对一技术指导',
-      '请求并发升级',
-    ],
-    highlight: true,
-  },
-  {
-    name: 'Max',
-    priceMonthly: 500,
-    priceYearly: 400,
-    descKey: '适合企业级核心业务与大规模应用',
-    features: [
-      '5M Tokens/月',
-      '企业专属极速节点',
-      '7x24小时VIP支持',
-      '私有化部署咨询',
-      '无限制并发',
-    ],
-  },
-];
-
-const PAY_AS_YOU_GO_PLANS = [
-  { price: 100, amount: 100, discount: null, tag: null },
-  { price: 200, amount: 200, discount: null, tag: null },
-  { price: 500, amount: 500, discount: 0.96, tag: '最推荐' },
-  { price: 1000, amount: 1000, discount: 0.95, tag: '最具性价比' },
-];
-
 // ============ TOC Sections ============
-const SECTIONS = [
+const ALL_SECTIONS = [
   { id: 'hero', label: '首页概览' },
   { id: 'pricing-sub', label: '订阅方案' },
   { id: 'pricing-payg', label: '按量付费' },
@@ -136,14 +88,14 @@ const SECTIONS = [
 ];
 
 // ============ TOC Navigation Component ============
-const TocNavigation = ({ activeSection, onNavigate }) => {
+const TocNavigation = ({ activeSection, onNavigate, sections }) => {
   return (
     <div className='hidden lg:flex fixed right-8 top-1/2 -translate-y-1/2 z-50 flex-col py-5 px-3 bg-white/60 dark:bg-zinc-800/60 backdrop-blur-xl border border-slate-200/50 dark:border-zinc-700/50 shadow-xl shadow-slate-200/20 dark:shadow-black/20 rounded-2xl gap-2'>
       <div className='text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1 px-3'>
         本页导航
       </div>
       <div className='relative flex flex-col'>
-        {SECTIONS.map((section) => {
+        {sections.map((section) => {
           const isActive = activeSection === section.id;
           return (
             <button
@@ -296,8 +248,54 @@ const HeroSection = ({ serverAddress, onCopy, copied, t }) => {
 };
 
 // ============ Subscription Pricing Section ============
-const SubscriptionSection = ({ t }) => {
-  const [subCycle, setSubCycle] = useState('year');
+const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
+  const [isYearly, setIsYearly] = useState(false);
+
+  if (!loading && plans.length === 0) return null;
+
+  const { symbol, rate } = getCurrencyConfig();
+
+  // Separate plans into monthly and yearly, grouped by title
+  const monthlyPlans = plans
+    .filter((p) => p.duration_unit === 'month' && p.duration_value === 1)
+    .sort((a, b) => a.price_amount - b.price_amount);
+  const yearlyPlans = plans
+    .filter((p) => p.duration_unit === 'year' && p.duration_value === 1)
+    .sort((a, b) => a.price_amount - b.price_amount);
+
+  const hasYearly = yearlyPlans.length > 0;
+  const yearlyByTitle = new Map(yearlyPlans.map((p) => [p.title, p]));
+  const monthlyByTitle = new Map(monthlyPlans.map((p) => [p.title, p]));
+
+  // Build display list: show only plans matching the selected billing period
+  const displayPlans = isYearly ? yearlyPlans : monthlyPlans;
+
+  // Adaptive grid based on plan count
+  const gridClass = (() => {
+    const count = displayPlans.length;
+    if (count <= 1) return 'grid-cols-1 max-w-md mx-auto';
+    if (count === 2) return 'grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto';
+    if (count === 3) return 'grid-cols-1 md:grid-cols-3 max-w-5xl mx-auto';
+    if (count === 4) return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto';
+    return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto';
+  })();
+
+  const handleSubscribe = (plan) => {
+    navigate(`/console/topup?tab=subscription&plan_id=${plan.id}`);
+  };
+
+  // Calculate max yearly savings for the toggle badge
+  let maxSavings = 0;
+  if (hasYearly) {
+    for (const yp of yearlyPlans) {
+      const mp = monthlyByTitle.get(yp.title);
+      if (mp) {
+        const s = Math.round((1 - yp.price_amount / (mp.price_amount * 12)) * 100);
+        if (s > maxSavings) maxSavings = s;
+      }
+    }
+  }
+  const savingsText = maxSavings > 0 ? (maxSavings % 10 === 0 ? `${10 - maxSavings / 10}折` : `${100 - maxSavings}折`) : null;
 
   return (
     <section id='pricing-sub' className='md:min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-4 md:px-6 py-12'>
@@ -309,127 +307,170 @@ const SubscriptionSection = ({ t }) => {
         <p className='text-slate-500 dark:text-zinc-400 text-base md:text-lg'>
           {t('包月或包年订阅，享受更稳定、更独享的专属资源与权益')}
         </p>
-      </div>
 
-      {/* Month/Year Toggle */}
-      <div className='flex justify-center mb-10 md:mb-12'>
-        <div className='bg-slate-100/80 dark:bg-zinc-800/80 backdrop-blur p-1 rounded-full inline-flex max-w-full overflow-x-auto scrollbar-hide'>
-          <button
-            onClick={() => setSubCycle('month')}
-            className={cn(
-              'px-6 md:px-8 py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-300 relative whitespace-nowrap',
-              subCycle === 'month'
-                ? 'text-slate-900 dark:text-white shadow-sm'
-                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700',
-            )}
-          >
-            {subCycle === 'month' && (
-              <motion.div
-                layoutId='sub-tab-bg'
-                className='absolute inset-0 bg-white dark:bg-zinc-700 rounded-full -z-10 shadow-sm'
-              />
-            )}
-            {t('按月支付')}
-          </button>
-          <button
-            onClick={() => setSubCycle('year')}
-            className={cn(
-              'px-6 md:px-8 py-2.5 rounded-full text-xs md:text-sm font-medium transition-all duration-300 relative whitespace-nowrap',
-              subCycle === 'year'
-                ? 'text-slate-900 dark:text-white shadow-sm'
-                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700',
-            )}
-          >
-            {subCycle === 'year' && (
-              <motion.div
-                layoutId='sub-tab-bg'
-                className='absolute inset-0 bg-white dark:bg-zinc-700 rounded-full -z-10 shadow-sm'
-              />
-            )}
-            {t('按年支付')}{' '}
-            <span className='ml-1 text-xs text-purple-600 dark:text-purple-400 font-bold bg-purple-100 dark:bg-purple-900/40 px-1.5 py-0.5 rounded-md'>
-              8折
-            </span>
-          </button>
-        </div>
+        {hasYearly && (
+          <div className='flex items-center justify-center mt-6'>
+            <div className='inline-flex items-center bg-slate-100 dark:bg-zinc-800 rounded-full p-1'>
+              <button
+                onClick={() => setIsYearly(false)}
+                className={cn(
+                  'px-5 py-2 rounded-full text-sm font-medium transition-all',
+                  !isYearly
+                    ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300',
+                )}
+              >
+                {t('按月支付')}
+              </button>
+              <button
+                onClick={() => setIsYearly(true)}
+                className={cn(
+                  'px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5',
+                  isYearly
+                    ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300',
+                )}
+              >
+                {t('按年支付')}
+                {savingsText && (
+                  <span className='text-xs font-semibold text-purple-600 dark:text-purple-400'>
+                    {savingsText}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Plan Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto px-2'>
-        {SUBSCRIPTION_PLANS.map((plan, idx) => {
-          const currentPrice =
-            subCycle === 'year' ? plan.priceYearly : plan.priceMonthly;
-          return (
-            <motion.div
-              key={idx}
-              whileHover={{ y: -5 }}
-              className={cn(
-                'bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border transition-all duration-300 flex flex-col relative',
-                plan.highlight
-                  ? 'border-purple-500/30 shadow-2xl shadow-purple-500/10 md:scale-105 z-10'
-                  : 'border-slate-200/60 dark:border-zinc-700/60 shadow-lg shadow-slate-200/20 dark:shadow-black/20',
-              )}
+      <div className={cn('grid gap-6 md:gap-8 px-2', gridClass)}>
+        {loading ? (
+          // Loading skeleton
+          [1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className='bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border border-slate-200/60 dark:border-zinc-700/60 shadow-lg animate-pulse'
             >
-              {plan.highlight && (
-                <div className='absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 rounded-t-3xl' />
-              )}
-
-              <h3 className='text-xl font-bold mb-2 text-slate-900 dark:text-white'>
-                {plan.name}
-              </h3>
-              <p className='text-sm text-slate-500 dark:text-zinc-400 min-h-[40px] mb-6'>
-                {t(plan.descKey)}
-              </p>
-
-              <div className='flex items-baseline gap-1 mb-2'>
-                <span className='text-4xl font-extrabold text-slate-900 dark:text-white'>
-                  ¥{currentPrice}
-                </span>
-                <span className='text-slate-500 dark:text-zinc-400'>
-                  /{t('月')}
-                </span>
-              </div>
-
-              <div className='h-6 mb-6 pb-8 border-b border-slate-100 dark:border-zinc-700 flex items-center'>
-                {subCycle === 'year' && (
-                  <span className='text-sm text-slate-400 line-through'>
-                    {t('原价')} ¥{plan.priceMonthly}/{t('月')}
-                  </span>
-                )}
-              </div>
-
-              <ul className='space-y-4 mb-8 flex-1'>
-                {plan.features.map((feat, i) => (
-                  <li
-                    key={i}
-                    className='flex items-start gap-3 text-sm text-slate-700 dark:text-zinc-300'
-                  >
-                    <Check
-                      className={cn(
-                        'w-5 h-5 shrink-0',
-                        plan.highlight
-                          ? 'text-purple-500'
-                          : 'text-slate-400 dark:text-zinc-500',
-                      )}
-                    />
-                    <span>{t(feat)}</span>
-                  </li>
+              <div className='h-6 w-24 bg-slate-200 dark:bg-zinc-700 rounded mb-3' />
+              <div className='h-4 w-40 bg-slate-200 dark:bg-zinc-700 rounded mb-6' />
+              <div className='h-10 w-32 bg-slate-200 dark:bg-zinc-700 rounded mb-6' />
+              <div className='space-y-3 mb-8'>
+                {[1, 2, 3].map((j) => (
+                  <div key={j} className='h-4 w-full bg-slate-100 dark:bg-zinc-700/50 rounded' />
                 ))}
-              </ul>
+              </div>
+              <div className='h-12 w-full bg-slate-200 dark:bg-zinc-700 rounded-xl' />
+            </div>
+          ))
+        ) : (
+          displayPlans.map((plan, idx) => {
+            const isPopular = idx === 0 && displayPlans.length > 1;
+            const price = Number(plan.price_amount || 0);
+            const convertedPrice = price * rate;
+            const displayPrice = convertedPrice.toFixed(Number.isInteger(convertedPrice) ? 0 : 2);
+            const duration = formatSubscriptionDuration(plan, t);
+            const totalAmount = Number(plan.total_amount || 0);
 
-              <button
+            // For yearly plans, calculate monthly equivalent price
+            const isYearlyPlan = plan.duration_unit === 'year' && plan.duration_value === 1;
+            const monthlyEquiv = isYearlyPlan ? (convertedPrice / 12) : null;
+            const monthlyEquivDisplay = monthlyEquiv ? monthlyEquiv.toFixed(Number.isInteger(monthlyEquiv) ? 0 : 2) : null;
+
+            // Check if this plan has a corresponding monthly plan (to show savings)
+            const correspondingMonthly = isYearlyPlan ? monthlyByTitle.get(plan.title) : null;
+            const savingsPercent = correspondingMonthly
+              ? Math.round((1 - price / (correspondingMonthly.price_amount * 12)) * 100)
+              : null;
+
+            const benefits = [
+              totalAmount > 0
+                ? { label: `${t('总额度')}: ${renderQuota(totalAmount)}` }
+                : { label: `${t('总额度')}: ${t('不限')}` },
+              plan.upgrade_group ? { label: `${t('升级分组')}: ${plan.upgrade_group}` } : null,
+            ].filter(Boolean);
+
+            return (
+              <motion.div
+                key={plan.id}
+                whileHover={{ y: -5 }}
                 className={cn(
-                  'w-full py-3.5 rounded-xl font-medium transition-colors text-sm',
-                  plan.highlight
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90 shadow-md shadow-purple-500/20'
-                    : 'bg-slate-100 dark:bg-zinc-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-zinc-600',
+                  'bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border transition-all duration-300 flex flex-col relative overflow-hidden',
+                  isPopular
+                    ? 'border-purple-500/30 shadow-2xl shadow-purple-500/10 md:scale-105 z-10'
+                    : 'border-slate-200/60 dark:border-zinc-700/60 shadow-lg shadow-slate-200/20 dark:shadow-black/20',
                 )}
               >
-                {t('订阅')} {plan.name}
-              </button>
-            </motion.div>
-          );
-        })}
+                {isPopular && (
+                  <div className='absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500' />
+                )}
+
+                <div className='flex items-center gap-2 mb-2'>
+                  <h3 className='text-xl font-bold text-slate-900 dark:text-white'>
+                    {plan.title}
+                  </h3>
+                  {savingsPercent > 0 && (
+                    <span className='text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full'>
+                      {t('省')} {savingsPercent}%
+                    </span>
+                  )}
+                </div>
+                {plan.subtitle && (
+                  <p className='text-sm text-slate-500 dark:text-zinc-400 min-h-[40px] mb-6'>
+                    {plan.subtitle}
+                  </p>
+                )}
+
+                <div className='flex items-baseline gap-1 mb-1'>
+                  <span className='text-4xl font-extrabold text-slate-900 dark:text-white'>
+                    {symbol}{displayPrice}
+                  </span>
+                  <span className='text-slate-500 dark:text-zinc-400'>
+                    / {duration}
+                  </span>
+                </div>
+                {monthlyEquivDisplay && (
+                  <p className='text-xs text-slate-400 dark:text-zinc-500 mb-2'>
+                    ≈ {symbol}{monthlyEquivDisplay} / {t('月')}
+                  </p>
+                )}
+
+                <div className='h-6 mb-6 pb-8 border-b border-slate-100 dark:border-zinc-700' />
+
+                <ul className='space-y-4 mb-8 flex-1'>
+                  {benefits.map((item, i) => (
+                    <li
+                      key={i}
+                      className='flex items-start gap-3 text-sm text-slate-700 dark:text-zinc-300'
+                    >
+                      <Check
+                        className={cn(
+                          'w-5 h-5 shrink-0',
+                          isPopular
+                            ? 'text-purple-500'
+                            : 'text-slate-400 dark:text-zinc-500',
+                        )}
+                      />
+                      <span>{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={() => handleSubscribe(plan)}
+                  className={cn(
+                    'w-full py-3.5 rounded-xl font-medium transition-colors text-sm',
+                    isPopular
+                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90 shadow-md shadow-purple-500/20'
+                      : 'bg-slate-100 dark:bg-zinc-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-zinc-600',
+                  )}
+                >
+                  {t('订阅')} {plan.title}
+                </button>
+              </motion.div>
+            );
+          })
+        )}
       </div>
       </div>
     </section>
@@ -437,7 +478,42 @@ const SubscriptionSection = ({ t }) => {
 };
 
 // ============ Pay-As-You-Go Section ============
-const PayAsYouGoSection = ({ t }) => {
+const PayAsYouGoSection = ({ t, statusState, navigate }) => {
+  const amountOptions = statusState?.status?.topup_amount_options || [];
+  const amountDiscount = statusState?.status?.topup_amount_discount || {};
+
+  // 构建卡片数据：从系统设置中读取充值选项和折扣
+  const plans = amountOptions.map((amount) => {
+    const discount = amountDiscount[amount] || null;
+    return { price: amount, amount, discount };
+  });
+
+  // 找出折扣最大的（discount 值最小）用于标记"最具性价比"
+  const bestDiscountAmount = plans.reduce((best, plan) => {
+    if (!plan.discount) return best;
+    if (!best || plan.discount < best.discount) return plan;
+    return best;
+  }, null);
+
+  // 格式化折扣显示：0.96 → "96折", 0.85 → "85折"
+  const formatDiscount = (discount) => {
+    if (!discount || discount >= 1) return '';
+    const zhe = Math.round(discount * 100);
+    // 如果是整十（如 90），显示为 "9折"；否则显示如 "96折"、"85折"
+    if (zhe % 10 === 0) return `${zhe / 10}折`;
+    return `${zhe}折`;
+  };
+
+  // grid 列数根据卡片数量自适应
+  const gridCols =
+    plans.length <= 2
+      ? 'grid-cols-1 sm:grid-cols-2'
+      : plans.length === 3
+        ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+        : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
+
+  if (plans.length === 0) return null;
+
   return (
     <section
       id='pricing-payg'
@@ -453,34 +529,30 @@ const PayAsYouGoSection = ({ t }) => {
         </p>
       </div>
 
-      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 px-2'>
-        {PAY_AS_YOU_GO_PLANS.map((plan, idx) => {
+      <div className={cn('grid gap-4 md:gap-6 px-2', gridCols)}>
+        {plans.map((plan, idx) => {
           const actualPrice = plan.discount
             ? plan.price * plan.discount
             : plan.price;
+          const isBestDiscount =
+            bestDiscountAmount && plan.amount === bestDiscountAmount.amount;
+          const tag = isBestDiscount ? '最具性价比' : null;
           return (
             <motion.div
               key={idx}
               whileHover={{ y: -5 }}
               className={cn(
                 'relative bg-white dark:bg-zinc-800 rounded-3xl p-5 md:p-6 border transition-all duration-300 flex flex-col',
-                plan.tag === '最推荐'
-                  ? 'border-purple-500/50 shadow-xl shadow-purple-500/10 ring-1 ring-purple-500/20'
-                  : plan.tag === '最具性价比'
-                    ? 'border-pink-500/50 shadow-xl shadow-pink-500/10 ring-1 ring-pink-500/20'
-                    : 'border-slate-200/60 dark:border-zinc-700/60 shadow-lg shadow-slate-200/20 dark:shadow-black/20 hover:border-slate-300',
+                isBestDiscount
+                  ? 'border-pink-500/50 shadow-xl shadow-pink-500/10 ring-1 ring-pink-500/20'
+                  : 'border-slate-200/60 dark:border-zinc-700/60 shadow-lg shadow-slate-200/20 dark:shadow-black/20 hover:border-slate-300',
               )}
             >
-              {plan.tag && (
+              {tag && (
                 <div
-                  className={cn(
-                    'absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold shadow-sm whitespace-nowrap text-white',
-                    plan.tag === '最推荐'
-                      ? 'bg-gradient-to-r from-purple-500 to-blue-500'
-                      : 'bg-gradient-to-r from-pink-500 to-purple-500',
-                  )}
+                  className='absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold shadow-sm whitespace-nowrap text-white bg-gradient-to-r from-pink-500 to-purple-500'
                 >
-                  {t(plan.tag)}
+                  {t(tag)}
                 </div>
               )}
 
@@ -502,11 +574,7 @@ const PayAsYouGoSection = ({ t }) => {
                     </span>
                     {plan.discount && (
                       <span className='text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md'>
-                        {plan.discount === 0.96
-                          ? '96折'
-                          : plan.discount === 0.95
-                            ? '95折'
-                            : `${plan.discount * 10}折`}
+                        {formatDiscount(plan.discount)}
                       </span>
                     )}
                   </div>
@@ -539,9 +607,10 @@ const PayAsYouGoSection = ({ t }) => {
               </div>
 
               <button
+                onClick={() => navigate(`/console/topup?tab=topup&amount=${plan.amount}`)}
                 className={cn(
                   'w-full py-3 rounded-xl font-medium transition-colors text-sm',
-                  plan.tag
+                  tag
                     ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-zinc-200'
                     : 'bg-slate-100 dark:bg-zinc-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-zinc-600',
                 )}
@@ -729,12 +798,12 @@ const IndustrySection = ({ t }) => {
           className='md:col-span-8 bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border border-slate-200/60 dark:border-zinc-700/60 shadow-xl shadow-slate-200/40 dark:shadow-black/20 relative overflow-hidden group hover:border-purple-500/30 transition-colors'
         >
           <div className='absolute top-0 right-0 p-6 md:p-8 opacity-5 group-hover:opacity-10 transition-opacity'>
-            <Map className='w-24 h-24 md:w-32 md:h-32' />
+            <MapIcon className='w-24 h-24 md:w-32 md:h-32' />
           </div>
           <div className='relative z-10 h-full flex flex-col justify-center'>
             <div className='flex items-center gap-3 mb-5 md:mb-6'>
               <div className='w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center'>
-                <Map className='w-5 h-5' />
+                <MapIcon className='w-5 h-5' />
               </div>
               <h3 className='text-xl md:text-2xl font-bold text-slate-900 dark:text-white'>
                 {t('超级行程定制')}
@@ -949,6 +1018,7 @@ const IndustrySection = ({ t }) => {
 // ============ Main Home Component ============
 const Home = () => {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [statusState] = useContext(StatusContext);
   const actualTheme = useActualTheme();
   const [homePageContentLoaded, setHomePageContentLoaded] = useState(false);
@@ -958,6 +1028,20 @@ const Home = () => {
   const [activeSection, setActiveSection] = useState('hero');
   const isMobile = useIsMobile();
   const snapContainerRef = useRef(null);
+
+  // Subscription plans (fetched from public API)
+  const [subscriptionPlans, setSubscriptionPlans] = useState([]);
+  const [subscriptionPlansLoading, setSubscriptionPlansLoading] = useState(true);
+
+  // Dynamic TOC sections based on available data
+  const amountOptions = statusState?.status?.topup_amount_options || [];
+  const sections = useMemo(() => {
+    return ALL_SECTIONS.filter((s) => {
+      if (s.id === 'pricing-sub' && !subscriptionPlansLoading && subscriptionPlans.length === 0) return false;
+      if (s.id === 'pricing-payg' && amountOptions.length === 0) return false;
+      return true;
+    });
+  }, [subscriptionPlans, subscriptionPlansLoading, amountOptions]);
 
   const serverAddress =
     statusState?.status?.server_address || `${window.location.origin}`;
@@ -1025,6 +1109,24 @@ const Home = () => {
     displayHomePageContent().then();
   }, []);
 
+  // ---- Fetch subscription plans ----
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const res = await API.get('/api/subscription/public-plans');
+        const { success, data } = res.data;
+        if (success && Array.isArray(data)) {
+          setSubscriptionPlans(data);
+        }
+      } catch (e) {
+        // Silently fail — homepage must remain functional
+      } finally {
+        setSubscriptionPlansLoading(false);
+      }
+    };
+    fetchPlans();
+  }, []);
+
   // ---- TOC navigate: scroll snap container to target section ----
   const handleTocNavigate = useCallback((sectionId) => {
     const el = document.getElementById(sectionId);
@@ -1043,11 +1145,11 @@ const Home = () => {
       const containerRect = container.getBoundingClientRect();
       const triggerY = containerRect.top + containerRect.height * 0.3;
 
-      for (let i = SECTIONS.length - 1; i >= 0; i--) {
-        const section = document.getElementById(SECTIONS[i].id);
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const section = document.getElementById(sections[i].id);
         if (!section) continue;
         if (section.getBoundingClientRect().top <= triggerY) {
-          setActiveSection(SECTIONS[i].id);
+          setActiveSection(sections[i].id);
           break;
         }
       }
@@ -1056,7 +1158,7 @@ const Home = () => {
     container.addEventListener('scroll', updateActiveSection, { passive: true });
     updateActiveSection();
     return () => container.removeEventListener('scroll', updateActiveSection);
-  }, [homePageContentLoaded, homePageContent]);
+  }, [homePageContentLoaded, homePageContent, sections]);
 
   return (
     <div className='w-full overflow-x-hidden'>
@@ -1069,7 +1171,7 @@ const Home = () => {
       {homePageContentLoaded && homePageContent === '' ? (
         <>
           {/* TOC Navigation — fixed, outside scroll container */}
-          <TocNavigation activeSection={activeSection} onNavigate={handleTocNavigate} />
+          <TocNavigation activeSection={activeSection} onNavigate={handleTocNavigate} sections={sections} />
 
           {/* Scroll Snap Container */}
           <div
@@ -1085,8 +1187,8 @@ const Home = () => {
               copied={copied}
               t={t}
             />
-            <SubscriptionSection t={t} />
-            <PayAsYouGoSection t={t} />
+            <SubscriptionSection t={t} plans={subscriptionPlans} loading={subscriptionPlansLoading} navigate={navigate} />
+            <PayAsYouGoSection t={t} statusState={statusState} navigate={navigate} />
             <QuickConfigSection t={t} />
             <IndustrySection t={t} />
 
