@@ -88,6 +88,29 @@ run = "go run main.go"
 description = "Run all Go tests"
 run = "go test ./..."
 
+[tasks."test:controller"]
+description = "Run controller tests (subscription, topup, token)"
+run = "go test ./controller/ -v"
+
+# ── E2E Testing ────────────────────────────────────────────
+
+[tasks.e2e]
+description = "Run Playwright E2E tests (headless)"
+dir = "web"
+run = "npx playwright test"
+
+[tasks."e2e:headed"]
+description = "Run E2E tests with visible browser"
+dir = "web"
+run = "npx playwright test --headed"
+
+[tasks."e2e:codegen"]
+description = "Open Playwright codegen to record test specs"
+dir = "web"
+run = "npx playwright codegen http://localhost:3099 --locale zh-CN"
+
+# ── Frontend ───────────────────────────────────────────────
+
 [tasks.fe-dev]
 description = "Start frontend dev server"
 dir = "web"
@@ -112,3 +135,26 @@ run = "bun run dev"
 description = "Build docs for production"
 dir = "docs"
 run = "bun install && bun run build"
+
+# ── Help & Status ──────────────────────────────────────────
+
+[tasks.help]
+description = "Show quick reference (commands cheat sheet)"
+run = "sed -n '/^## Quick Reference/,/^---$/p' docs/project-guide.md | sed '$d'"
+
+[tasks."help:detail"]
+description = "Show full project guide"
+run = "cat docs/project-guide.md"
+
+[tasks.status]
+description = "Git branch, worktrees, recent commits"
+run = """
+echo "=== Branch ==="
+git branch --show-current
+echo ""
+echo "=== Worktrees ==="
+git worktree list
+echo ""
+echo "=== Recent Commits ==="
+git log --oneline -10
+"""
