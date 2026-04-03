@@ -2,6 +2,8 @@ package model
 
 import (
 	"strings"
+
+	"github.com/QuantumNous/new-api/constant"
 )
 
 // 简化的供应商映射规则
@@ -20,6 +22,7 @@ var defaultVendorRules = map[string]string{
 	"qwen":     "阿里巴巴",
 	"deepseek": "DeepSeek",
 	"abab":     "MiniMax",
+	"minimax":  "MiniMax",
 	"ernie":    "百度",
 	"spark":    "讯飞",
 	"hunyuan":  "腾讯",
@@ -67,15 +70,47 @@ var defaultVendorIcons = map[string]string{
 	"Azure":      "AzureAI",
 }
 
-// initDefaultVendorMapping 简化的默认供应商映射
+// channelTypeVendorMap 渠道类型到供应商名称的映射（仅供应商专属渠道，不含聚合器/代理类型）
+var channelTypeVendorMap = map[int]string{
+	constant.ChannelTypeAnthropic:   "Anthropic",
+	constant.ChannelTypeClaudeOAuth: "Anthropic",
+	constant.ChannelTypeBaidu:       "百度",
+	constant.ChannelTypeBaiduV2:     "百度",
+	constant.ChannelTypeZhipu:       "智谱",
+	constant.ChannelTypeZhipu_v4:    "智谱",
+	constant.ChannelTypeAli:         "阿里巴巴",
+	constant.ChannelTypeXunfei:      "讯飞",
+	constant.ChannelType360:         "360",
+	constant.ChannelTypeTencent:     "腾讯",
+	constant.ChannelTypeGemini:      "Google",
+	constant.ChannelTypePaLM:        "Google",
+	constant.ChannelTypeMoonshot:    "Moonshot",
+	constant.ChannelTypeLingYiWanWu: "零一万物",
+	constant.ChannelTypeCohere:      "Cohere",
+	constant.ChannelTypeMiniMax:     "MiniMax",
+	constant.ChannelTypeJina:        "Jina",
+	constant.ChannelCloudflare:      "Cloudflare",
+	constant.ChannelTypeMistral:     "Mistral",
+	constant.ChannelTypeDeepSeek:    "DeepSeek",
+	constant.ChannelTypeVolcEngine:  "字节跳动",
+	constant.ChannelTypeDoubaoVideo: "字节跳动",
+	constant.ChannelTypeXai:         "xAI",
+	constant.ChannelTypeKling:       "快手",
+	constant.ChannelTypeJimeng:      "即梦",
+	constant.ChannelTypeVidu:        "Vidu",
+	constant.ChannelTypeSora:        "OpenAI",
+	constant.ChannelTypeCodex:       "OpenAI",
+}
+
+// initDefaultVendorMapping 默认供应商映射：先按模型名匹配，再按渠道类型回退
 func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vendor, enableAbilities []AbilityWithChannel) {
+	// 阶段一：基于模型名称的模式匹配
 	for _, ability := range enableAbilities {
 		modelName := ability.Model
 		if _, exists := metaMap[modelName]; exists {
 			continue
 		}
 
-		// 匹配供应商
 		vendorID := 0
 		modelLower := strings.ToLower(modelName)
 		for pattern, vendorName := range defaultVendorRules {
@@ -85,12 +120,22 @@ func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vend
 			}
 		}
 
-		// 创建模型元数据
 		metaMap[modelName] = &Model{
 			ModelName: modelName,
 			VendorID:  vendorID,
 			Status:    1,
 			NameRule:  NameRuleExact,
+		}
+	}
+
+	// 阶段二：对仍无供应商的模型，根据渠道类型回退分配
+	for _, ability := range enableAbilities {
+		meta, exists := metaMap[ability.Model]
+		if !exists || meta.VendorID != 0 {
+			continue
+		}
+		if vendorName, ok := channelTypeVendorMap[ability.ChannelType]; ok {
+			meta.VendorID = getOrCreateVendor(vendorName, vendorMap)
 		}
 	}
 }
