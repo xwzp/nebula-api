@@ -8,13 +8,6 @@ COPY ./web .
 COPY ./VERSION .
 RUN DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat VERSION) bun run build
 
-# Build docs site
-WORKDIR /build/docs
-COPY docs/package.json docs/bun.lock ./
-RUN bun install
-COPY ./docs .
-RUN bun run build
-
 FROM golang:alpine AS builder2
 ENV GO111MODULE=on CGO_ENABLED=0
 
@@ -31,7 +24,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 COPY --from=builder /build/web/dist ./web/dist
-COPY --from=builder /build/docs/out ./docs/out
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$(cat VERSION)'" -o nebula-api

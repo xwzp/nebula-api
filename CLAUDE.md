@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI providers (OpenAI, Claude, Gemini, Azure, AWS Bedrock, etc.) behind a unified API, with user management, billing, rate limiting, and an admin dashboard.
 
+## Branch Strategy
+
+This project is forked from [QuantumNous/new-api](https://github.com/QuantumNous/new-api).
+
+- **main** — Tracks the upstream New API project. Used for syncing with upstream releases.
+- **main-plus** — Custom modifications and enhancements on top of main. This is the primary development branch for our own features.
+
 ## Tech Stack
 
 - **Backend**: Go 1.22+, Gin web framework, GORM v2 ORM
