@@ -38,7 +38,7 @@ func SubscriptionRequestAlipayPay(c *gin.Context) {
 
 	var p = alipay.TradePreCreate{}
 	p.NotifyURL = notifyUrl
-	p.Subject = fmt.Sprintf("订阅套餐: %s", model.GetPlanGroupTitle(plan))
+	p.Subject = fmt.Sprintf("订阅套餐: %s", plan.Title)
 	p.OutTradeNo = order.TradeNo
 	p.TotalAmount = totalAmount
 	p.TimeoutExpress = "15m"

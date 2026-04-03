@@ -34,8 +34,8 @@ import { IconCreditCard } from '@douyinfe/semi-icons';
 import { renderQuota } from '../../../helpers';
 import { getCurrencyConfig } from '../../../helpers/render';
 import {
-  formatSubscriptionDuration,
-  formatSubscriptionResetPeriod,
+  formatPeriodLabel, calcPeriodPrice,
+  getStripePriceId, getCreemProductId,
 } from '../../../helpers/subscriptionFormat';
 
 const { Text } = Typography;
@@ -61,17 +61,19 @@ const SubscriptionPurchaseModal = ({
   onPayWechat,
   onPayAlipay,
 }) => {
+  // selectedPlan is now { plan, periodType }
   const plan = selectedPlan?.plan;
+  const periodType = selectedPlan?.periodType || 'monthly';
   const totalAmount = Number(plan?.total_amount || 0);
   const { symbol, rate } = getCurrencyConfig();
-  const price = plan ? Number(plan.price_amount || 0) : 0;
+  const price = plan ? calcPeriodPrice(plan, periodType) : 0;
   const convertedPrice = price * rate;
   const displayPrice = convertedPrice.toFixed(
     Number.isInteger(convertedPrice) ? 0 : 2,
   );
-  // 只有当管理员开启支付网关 AND 套餐配置了对应的支付ID时才显示
-  const hasStripe = enableStripeTopUp && !!plan?.stripe_price_id;
-  const hasCreem = enableCreemTopUp && !!plan?.creem_product_id;
+  // Only show payment gateway if admin enabled it AND the plan has the corresponding ID for this period
+  const hasStripe = enableStripeTopUp && !!getStripePriceId(plan, periodType);
+  const hasCreem = enableCreemTopUp && !!getCreemProductId(plan, periodType);
   const hasEpay = enableOnlineTopUp && epayMethods.length > 0;
   const hasWechat = enableWechatTopUp;
   const hasAlipay = enableAlipayTopUp;
@@ -97,7 +99,7 @@ const SubscriptionPurchaseModal = ({
     >
       {plan ? (
         <div className='space-y-4 pb-10'>
-          {/* 套餐信息 */}
+          {/* Plan info */}
           <Card className='!rounded-xl !border-0 bg-slate-50 dark:bg-slate-800'>
             <div className='space-y-3'>
               <div className='flex justify-between items-center'>
@@ -109,30 +111,20 @@ const SubscriptionPurchaseModal = ({
                   className='text-slate-900 dark:text-slate-100'
                   style={{ maxWidth: 200 }}
                 >
-                  {plan.group_title}
+                  {plan.title}
                 </Typography.Text>
               </div>
               <div className='flex justify-between items-center'>
                 <Text strong className='text-slate-700 dark:text-slate-200'>
-                  {t('有效期')}：
+                  {t('付款周期')}：
                 </Text>
                 <div className='flex items-center'>
                   <CalendarClock size={14} className='mr-1 text-slate-500' />
                   <Text className='text-slate-900 dark:text-slate-100'>
-                    {formatSubscriptionDuration(plan, t)}
+                    {formatPeriodLabel(periodType, t)}
                   </Text>
                 </div>
               </div>
-              {formatSubscriptionResetPeriod(plan, t) !== t('不重置') && (
-                <div className='flex justify-between items-center'>
-                  <Text strong className='text-slate-700 dark:text-slate-200'>
-                    {t('重置周期')}：
-                  </Text>
-                  <Text className='text-slate-900 dark:text-slate-100'>
-                    {formatSubscriptionResetPeriod(plan, t)}
-                  </Text>
-                </div>
-              )}
               <div className='flex justify-between items-center'>
                 <Text strong className='text-slate-700 dark:text-slate-200'>
                   {t('总额度')}：
@@ -175,7 +167,7 @@ const SubscriptionPurchaseModal = ({
             </div>
           </Card>
 
-          {/* 支付方式 */}
+          {/* Payment methods */}
           {purchaseLimitReached && (
             <Banner
               type='warning'
@@ -251,7 +243,7 @@ const SubscriptionPurchaseModal = ({
                 </div>
               )}
 
-              {/* 易支付 */}
+              {/* Epay */}
               {hasEpay && (
                 <div className='flex gap-2'>
                   <Select

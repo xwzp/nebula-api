@@ -17,47 +17,33 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useContext } from 'react';
-import { Banner } from '@douyinfe/semi-ui';
+import React from 'react';
 import CardPro from '../../common/ui/CardPro';
 import SubscriptionsTable from './SubscriptionsTable';
 import SubscriptionsActions from './SubscriptionsActions';
 import SubscriptionsDescription from './SubscriptionsDescription';
-import AddEditGroupModal from './modals/AddEditGroupModal';
 import AddEditSubscriptionModal from './modals/AddEditSubscriptionModal';
 import { useSubscriptionsData } from '../../../hooks/subscriptions/useSubscriptionsData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
-import { StatusContext } from '../../../context/Status';
 
 const SubscriptionsPage = () => {
   const subscriptionsData = useSubscriptionsData();
   const isMobile = useIsMobile();
-  const [statusState] = useContext(StatusContext);
-  const enableEpay = !!statusState?.status?.enable_online_topup;
 
   const {
-    groups,
-    groupCount,
+    plans,
+    planCount,
     loading,
-
-    // Group modal
-    showGroupEdit,
-    editingGroup,
-    openCreateGroup,
-    openEditGroup,
-    closeGroupEdit,
-    setGroupEnabled,
-    deleteGroup,
 
     // Plan modal
     showPlanEdit,
     editingPlan,
-    editingPlanGroupId,
     openCreatePlan,
     openEditPlan,
     closePlanEdit,
     setPlanEnabled,
+    deletePlan,
 
     sheetPlacement,
 
@@ -69,20 +55,10 @@ const SubscriptionsPage = () => {
 
   return (
     <>
-      <AddEditGroupModal
-        visible={showGroupEdit}
-        handleClose={closeGroupEdit}
-        editingGroup={editingGroup}
-        placement={sheetPlacement}
-        refresh={refresh}
-        t={t}
-      />
-
       <AddEditSubscriptionModal
         visible={showPlanEdit}
         handleClose={closePlanEdit}
         editingPlan={editingPlan}
-        groupId={editingPlanGroupId}
         placement={sheetPlacement}
         refresh={refresh}
         t={t}
@@ -100,21 +76,14 @@ const SubscriptionsPage = () => {
         actionsArea={
           <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-2 w-full'>
             <div className='order-1 md:order-0 w-full md:w-auto'>
-              <SubscriptionsActions openCreateGroup={openCreateGroup} t={t} />
+              <SubscriptionsActions openCreatePlan={openCreatePlan} t={t} />
             </div>
-            <Banner
-              type='info'
-              description={t('套餐组包含多个计费周期（月付/年付等），展开可管理各周期')}
-              closeIcon={null}
-              className='!rounded-lg order-2 md:order-1'
-              style={{ maxWidth: '100%' }}
-            />
           </div>
         }
         paginationArea={createCardProPagination({
           currentPage: subscriptionsData.activePage,
           pageSize: subscriptionsData.pageSize,
-          total: groupCount,
+          total: planCount,
           onPageChange: subscriptionsData.handlePageChange,
           onPageSizeChange: subscriptionsData.handlePageSizeChange,
           isMobile,
@@ -123,16 +92,12 @@ const SubscriptionsPage = () => {
         t={t}
       >
         <SubscriptionsTable
-          groups={groups}
+          plans={plans}
           loading={loading}
           compactMode={compactMode}
-          openEditGroup={openEditGroup}
-          setGroupEnabled={setGroupEnabled}
-          deleteGroup={deleteGroup}
-          openCreatePlan={openCreatePlan}
           openEditPlan={openEditPlan}
           setPlanEnabled={setPlanEnabled}
-          enableEpay={enableEpay}
+          deletePlan={deletePlan}
           t={t}
         />
       </CardPro>

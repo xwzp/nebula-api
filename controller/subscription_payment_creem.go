@@ -15,13 +15,13 @@ import (
 )
 
 type SubscriptionCreemPayRequest struct {
-	PlanId int `json:"plan_id"`
+	PlanId     int    `json:"plan_id"`
+	PeriodType string `json:"period_type"`
 }
 
 func SubscriptionRequestCreemPay(c *gin.Context) {
 	var req SubscriptionCreemPayRequest
 
-	// Keep body for debugging consistency (like RequestCreemPay)
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		log.Printf("read subscription creem pay req body err: %v", err)
@@ -34,6 +34,10 @@ func SubscriptionRequestCreemPay(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "error", "data": "参数错误"})
 		return
 	}
+	if !model.ValidatePeriodType(req.PeriodType) {
+		c.JSON(200, gin.H{"message": "error", "data": "无效的付款周期"})
+		return
+	}
 
 	plan, err := model.GetSubscriptionPlanById(req.PlanId)
 	if err != nil {
@@ -44,7 +48,12 @@ func SubscriptionRequestCreemPay(c *gin.Context) {
 		common.ApiErrorMsg(c, "套餐未启用")
 		return
 	}
-	if plan.CreemProductId == "" {
+	if !plan.IsPeriodEnabled(req.PeriodType) {
+		common.ApiErrorMsg(c, "该付款周期未启用")
+		return
+	}
+	creemProductId := plan.GetCreemProductId(req.PeriodType)
+	if creemProductId == "" {
 		common.ApiErrorMsg(c, "该套餐未配置 CreemProductId")
 		return
 	}
@@ -76,14 +85,15 @@ func SubscriptionRequestCreemPay(c *gin.Context) {
 		}
 	}
 
+	price := plan.CalcPeriodPrice(req.PeriodType)
 	reference := "sub-creem-ref-" + randstr.String(6)
 	referenceId := "sub_ref_" + common.Sha1([]byte(reference+time.Now().String()+user.Username))
 
-	// create pending order first
 	order := &model.SubscriptionOrder{
 		UserId:        userId,
 		PlanId:        plan.Id,
-		Money:         plan.PriceAmount,
+		PeriodType:    req.PeriodType,
+		Money:         price,
 		TradeNo:       referenceId,
 		PaymentMethod: PaymentMethodCreem,
 		CreateTime:    time.Now().Unix(),
@@ -94,7 +104,6 @@ func SubscriptionRequestCreemPay(c *gin.Context) {
 		return
 	}
 
-	// Reuse Creem checkout generator by building a lightweight product reference.
 	currency := "USD"
 	switch operation_setting.GetGeneralSetting().QuotaDisplayType {
 	case operation_setting.QuotaDisplayTypeCNY:
@@ -105,9 +114,9 @@ func SubscriptionRequestCreemPay(c *gin.Context) {
 		currency = "USD"
 	}
 	product := &CreemProduct{
-		ProductId: plan.CreemProductId,
-		Name:      model.GetPlanGroupTitle(plan),
-		Price:     plan.PriceAmount,
+		ProductId: creemProductId,
+		Name:      plan.Title,
+		Price:     price,
 		Currency:  currency,
 		Quota:     0,
 	}

@@ -168,17 +168,11 @@ func SetApiRouter(router *gin.Engine) {
 		subscriptionAdminRoute := apiRouter.Group("/subscription/admin")
 		subscriptionAdminRoute.Use(middleware.AdminAuth())
 		{
-			// Plan group management
-			subscriptionAdminRoute.GET("/groups", controller.AdminListSubscriptionPlanGroups)
-			subscriptionAdminRoute.POST("/groups", controller.AdminCreateSubscriptionPlanGroup)
-			subscriptionAdminRoute.PUT("/groups/:id", controller.AdminUpdateSubscriptionPlanGroup)
-			subscriptionAdminRoute.DELETE("/groups/:id", controller.AdminDeleteSubscriptionPlanGroup)
-			subscriptionAdminRoute.PATCH("/groups/:id", controller.AdminUpdateSubscriptionPlanGroupStatus)
-
-			// Plan variant management
-			subscriptionAdminRoute.POST("/groups/:id/plans", controller.AdminCreateSubscriptionPlan)
+			// Plan management
 			subscriptionAdminRoute.GET("/plans", controller.AdminListSubscriptionPlans)
+			subscriptionAdminRoute.POST("/plans", controller.AdminCreateSubscriptionPlan)
 			subscriptionAdminRoute.PUT("/plans/:id", controller.AdminUpdateSubscriptionPlan)
+			subscriptionAdminRoute.DELETE("/plans/:id", controller.AdminDeleteSubscriptionPlan)
 			subscriptionAdminRoute.PATCH("/plans/:id", controller.AdminUpdateSubscriptionPlanStatus)
 			subscriptionAdminRoute.POST("/bind", controller.AdminBindSubscription)
 

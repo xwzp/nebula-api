@@ -20,7 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useContext, useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { API, showError, copy, showSuccess, renderQuota } from '../../helpers';
 import { getCurrencyConfig } from '../../helpers/render';
-import { formatSubscriptionDuration } from '../../helpers/subscriptionFormat';
+import { parseFeatures, sortBySortOrderThenAmount } from '../../helpers/subscriptionFormat';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import { StatusContext } from '../../context/Status';
 import { useActualTheme } from '../../context/Theme';
@@ -248,36 +248,53 @@ const HeroSection = ({ serverAddress, onCopy, copied, t }) => {
 };
 
 // ============ Subscription Pricing Section ============
-const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
-  const [isYearly, setIsYearly] = useState(false);
+const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
+  const [selectedPeriod, setSelectedPeriod] = useState('monthly');
 
-  if (!loading && groups.length === 0) return null;
+  if (!loading && plans.length === 0) return null;
 
   const { symbol, rate } = getCurrencyConfig();
 
-  // For each group, find the monthly and yearly variants
-  const getVariant = (group, unit) =>
-    (group.plans || []).find((p) => p.duration_unit === unit && p.duration_value === 1);
+  // Discover which periods are available across all plans
+  const hasMonthly = plans.some((p) => p.periods?.monthly?.enabled);
+  const hasQuarterly = plans.some((p) => p.periods?.quarterly?.enabled);
+  const hasYearly = plans.some((p) => p.periods?.yearly?.enabled);
+  const availablePeriods = [
+    hasMonthly && 'monthly',
+    hasQuarterly && 'quarterly',
+    hasYearly && 'yearly',
+  ].filter(Boolean);
 
-  const hasYearly = groups.some((g) => getVariant(g, 'year'));
-
-  // Calculate max yearly savings for the toggle badge
-  let maxSavings = 0;
-  if (hasYearly) {
-    for (const g of groups) {
-      const mp = getVariant(g, 'month');
-      const yp = getVariant(g, 'year');
-      if (mp && yp) {
-        const s = Math.round((1 - yp.price_amount / (mp.price_amount * 12)) * 100);
-        if (s > maxSavings) maxSavings = s;
+  // Calculate max savings per period (vs monthly baseline)
+  const calcMaxSavings = (periodKey, months) => {
+    let max = 0;
+    for (const p of plans) {
+      const mp = p.periods?.monthly;
+      const pp = p.periods?.[periodKey];
+      if (mp?.enabled && pp?.enabled && mp.price > 0) {
+        const s = Math.round((1 - pp.price / (mp.price * months)) * 100);
+        if (s > max) max = s;
       }
     }
-  }
-  const savingsText = maxSavings > 0 ? (maxSavings % 10 === 0 ? `${10 - maxSavings / 10}折` : `${100 - maxSavings}折`) : null;
+    return max;
+  };
+  const quarterlySavings = hasQuarterly ? calcMaxSavings('quarterly', 3) : 0;
+  const yearlySavings = hasYearly ? calcMaxSavings('yearly', 12) : 0;
 
-  // Adaptive grid based on group count
+  const formatSavings = (pct) => {
+    if (pct <= 0) return null;
+    return pct % 10 === 0 ? `${10 - pct / 10}折` : `${100 - pct}折`;
+  };
+
+  const periodConfig = {
+    monthly: { label: t('按月支付'), savings: null },
+    quarterly: { label: t('按季支付'), savings: formatSavings(quarterlySavings) },
+    yearly: { label: t('按年支付'), savings: formatSavings(yearlySavings) },
+  };
+
+  // Adaptive grid based on plan count
   const gridClass = (() => {
-    const count = groups.length;
+    const count = plans.length;
     if (count <= 1) return 'grid-cols-1 max-w-md mx-auto';
     if (count === 2) return 'grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto';
     if (count === 3) return 'grid-cols-1 md:grid-cols-3 max-w-5xl mx-auto';
@@ -287,16 +304,6 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
 
   const handleSubscribe = (plan) => {
     navigate(`/console/topup?tab=subscription&plan_id=${plan.id}`);
-  };
-
-  // Parse features JSON string into array
-  const parseFeatures = (featuresStr) => {
-    if (!featuresStr) return [];
-    try {
-      return JSON.parse(featuresStr);
-    } catch {
-      return [];
-    }
   };
 
   return (
@@ -310,36 +317,32 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
           {t('包月或包年订阅，享受更稳定、更独享的专属资源与权益')}
         </p>
 
-        {hasYearly && (
+        {availablePeriods.length > 1 && (
           <div className='flex items-center justify-center mt-6'>
             <div className='inline-flex items-center bg-slate-100 dark:bg-zinc-800 rounded-full p-1'>
-              <button
-                onClick={() => setIsYearly(false)}
-                className={cn(
-                  'px-5 py-2 rounded-full text-sm font-medium transition-all',
-                  !isYearly
-                    ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300',
-                )}
-              >
-                {t('按月支付')}
-              </button>
-              <button
-                onClick={() => setIsYearly(true)}
-                className={cn(
-                  'px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5',
-                  isYearly
-                    ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300',
-                )}
-              >
-                {t('按年支付')}
-                {savingsText && (
-                  <span className='text-xs font-semibold text-purple-600 dark:text-purple-400'>
-                    {savingsText}
-                  </span>
-                )}
-              </button>
+              {availablePeriods.map((pk) => {
+                const cfg = periodConfig[pk];
+                const isActive = selectedPeriod === pk;
+                return (
+                  <button
+                    key={pk}
+                    onClick={() => setSelectedPeriod(pk)}
+                    className={cn(
+                      'px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5',
+                      isActive
+                        ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-sm'
+                        : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300',
+                    )}
+                  >
+                    {cfg.label}
+                    {cfg.savings && (
+                      <span className='text-xs font-semibold text-purple-600 dark:text-purple-400'>
+                        {cfg.savings}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -366,45 +369,54 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
             </div>
           ))
         ) : (
-          groups.map((group, idx) => {
-            const monthlyVariant = getVariant(group, 'month');
-            const yearlyVariant = getVariant(group, 'year');
-            // Pick the active variant based on toggle; fallback to the first available plan
-            const activePlan = isYearly
-              ? (yearlyVariant || monthlyVariant || (group.plans || [])[0])
-              : (monthlyVariant || yearlyVariant || (group.plans || [])[0]);
+          plans.map((plan) => {
+            const periods = plan.periods || {};
 
-            if (!activePlan) return null;
+            // Pick the active period: prefer selectedPeriod, fall back to first enabled
+            const activePeriodKey = periods[selectedPeriod]?.enabled
+              ? selectedPeriod
+              : availablePeriods.find((pk) => periods[pk]?.enabled) || 'monthly';
+            const activePeriod = periods[activePeriodKey];
+            if (!activePeriod) return null;
 
-            const isPopular = !!group.tag;
-            const price = Number(activePlan.price_amount || 0);
+            const isPopular = !!plan.tag;
+            const price = Number(activePeriod.price || 0);
             const convertedPrice = price * rate;
             const displayPrice = convertedPrice.toFixed(Number.isInteger(convertedPrice) ? 0 : 2);
-            const duration = formatSubscriptionDuration(activePlan, t);
-            const totalAmount = Number(activePlan.total_amount || 0);
+            const periodLabel = activePeriodKey === 'monthly' ? t('月') : activePeriodKey === 'quarterly' ? t('季') : t('年');
+            const totalAmount = Number(plan.total_amount || 0);
 
-            // For yearly plans, calculate monthly equivalent price
-            const isYearlyPlan = activePlan.duration_unit === 'year' && activePlan.duration_value === 1;
-            const monthlyEquiv = isYearlyPlan ? (convertedPrice / 12) : null;
+            // For non-monthly periods, calculate monthly equivalent price
+            const periodMonths = activePeriodKey === 'yearly' ? 12 : activePeriodKey === 'quarterly' ? 3 : 1;
+            const monthlyEquiv = periodMonths > 1 ? (convertedPrice / periodMonths) : null;
             const monthlyEquivDisplay = monthlyEquiv ? monthlyEquiv.toFixed(Number.isInteger(monthlyEquiv) ? 0 : 2) : null;
 
-            // Calculate savings if both monthly and yearly exist
-            const savingsPercent = (isYearlyPlan && monthlyVariant)
-              ? Math.round((1 - price / (monthlyVariant.price_amount * 12)) * 100)
+            // Calculate savings vs monthly
+            const mp = periods.monthly;
+            const savingsPercent = (periodMonths > 1 && mp?.enabled && mp.price > 0)
+              ? Math.round((1 - price / (mp.price * periodMonths)) * 100)
               : null;
 
-            // Build benefits from group features or fallback to plan data
-            const features = parseFeatures(group.features);
+            // Use period-specific features if non-empty, otherwise shared features
+            const parsedPeriodFeatures = parseFeatures(activePeriod.features);
+            const features = parsedPeriodFeatures.length > 0
+              ? parsedPeriodFeatures
+              : parseFeatures(plan.features);
+
+            // Always-shown plan details
+            const planDetails = [
+              totalAmount > 0
+                ? { text: `${t('总额度')}: ${renderQuota(totalAmount)}`, icon: 'check', style: 'default' }
+                : { text: `${t('总额度')}: ${t('不限')}`, icon: 'check', style: 'default' },
+              plan.upgrade_group
+                ? { text: `${t('升级分组')}: ${plan.upgrade_group}`, icon: 'check', style: 'default' }
+                : null,
+            ].filter(Boolean);
+
+            // Combine: custom features first, then plan details
             const benefits = features.length > 0
-              ? features
-              : [
-                  totalAmount > 0
-                    ? { text: `${t('总额度')}: ${renderQuota(totalAmount)}`, icon: 'check', style: 'default' }
-                    : { text: `${t('总额度')}: ${t('不限')}`, icon: 'check', style: 'default' },
-                  activePlan.upgrade_group
-                    ? { text: `${t('升级分组')}: ${activePlan.upgrade_group}`, icon: 'check', style: 'default' }
-                    : null,
-                ].filter(Boolean);
+              ? [...features, ...planDetails]
+              : planDetails;
 
             const getFeatureIcon = (item) => {
               if (item.icon === 'x') return 'text-red-400 dark:text-red-500';
@@ -414,7 +426,7 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
 
             return (
               <motion.div
-                key={group.id}
+                key={plan.id}
                 whileHover={{ y: -5 }}
                 className={cn(
                   'bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border transition-all duration-300 flex flex-col relative overflow-hidden',
@@ -429,11 +441,11 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
 
                 <div className='flex items-center gap-2 mb-2'>
                   <h3 className='text-xl font-bold text-slate-900 dark:text-white'>
-                    {group.title}
+                    {plan.title}
                   </h3>
-                  {group.tag && (
+                  {plan.tag && (
                     <span className='text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded-full'>
-                      {group.tag}
+                      {plan.tag}
                     </span>
                   )}
                   {savingsPercent > 0 && (
@@ -442,9 +454,9 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
                     </span>
                   )}
                 </div>
-                {group.subtitle && (
+                {plan.subtitle && (
                   <p className='text-sm text-slate-500 dark:text-zinc-400 min-h-[40px] mb-6'>
-                    {group.subtitle}
+                    {plan.subtitle}
                   </p>
                 )}
 
@@ -453,12 +465,12 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
                     {symbol}{displayPrice}
                   </span>
                   <span className='text-slate-500 dark:text-zinc-400'>
-                    / {duration}
+                    / {periodLabel}
                   </span>
                 </div>
                 {monthlyEquivDisplay && (
                   <p className='text-xs text-slate-400 dark:text-zinc-500 mb-2'>
-                    ≈ {symbol}{monthlyEquivDisplay} / {t('月')}
+                    {'\u2248'} {symbol}{monthlyEquivDisplay} / {t('月')}
                   </p>
                 )}
 
@@ -486,7 +498,7 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
                 </ul>
 
                 <button
-                  onClick={() => handleSubscribe(activePlan)}
+                  onClick={() => handleSubscribe(plan)}
                   className={cn(
                     'w-full py-3.5 rounded-xl font-medium transition-colors text-sm',
                     isPopular
@@ -494,7 +506,7 @@ const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
                       : 'bg-slate-100 dark:bg-zinc-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-zinc-600',
                   )}
                 >
-                  {t('订阅')} {group.title}
+                  {t('订阅')} {plan.title}
                 </button>
               </motion.div>
             );
@@ -525,16 +537,6 @@ const PayAsYouGoSection = ({ t, topupTiers = [], navigate }) => {
         : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
 
   if (topupTiers.length === 0) return null;
-
-  // Parse features JSON string into array
-  const parseFeatures = (featuresStr) => {
-    if (!featuresStr) return [];
-    try {
-      return JSON.parse(featuresStr);
-    } catch {
-      return [];
-    }
-  };
 
   // Find best discount tier
   const bestDiscountTier = topupTiers.reduce((best, tier) => {
@@ -1186,7 +1188,7 @@ const Home = () => {
         const res = await API.get('/api/topup/tiers');
         const { success, data } = res.data;
         if (success && Array.isArray(data)) {
-          setTopupTiers(data);
+          setTopupTiers(sortBySortOrderThenAmount(data));
         }
       } catch (e) {
         // Silently fail
@@ -1257,7 +1259,7 @@ const Home = () => {
               copied={copied}
               t={t}
             />
-            <SubscriptionSection t={t} groups={subscriptionGroups} loading={subscriptionGroupsLoading} navigate={navigate} />
+            <SubscriptionSection t={t} plans={subscriptionGroups} loading={subscriptionGroupsLoading} navigate={navigate} />
             <PayAsYouGoSection t={t} topupTiers={topupTiers} navigate={navigate} />
             <QuickConfigSection t={t} />
             <IndustrySection t={t} />

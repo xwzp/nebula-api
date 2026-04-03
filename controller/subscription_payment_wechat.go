@@ -55,7 +55,7 @@ func SubscriptionRequestWechatPay(c *gin.Context) {
 	resp, _, err := svc.Prepay(ctx, native.PrepayRequest{
 		Appid:       core.String(setting.WechatPayAppId),
 		Mchid:       core.String(setting.WechatPayMchId),
-		Description: core.String(fmt.Sprintf("订阅套餐: %s", model.GetPlanGroupTitle(plan))),
+		Description: core.String(fmt.Sprintf("订阅套餐: %s", plan.Title)),
 		OutTradeNo:  core.String(order.TradeNo),
 		NotifyUrl:   core.String(notifyUrl),
 		TimeExpire:  &expireTime,

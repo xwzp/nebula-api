@@ -32,38 +32,6 @@ import { convertUSDToCurrency } from '../../../helpers/render';
 
 const { Text } = Typography;
 
-// ---- Plan variant helpers ----
-
-function formatDuration(plan, t) {
-  if (!plan) return '';
-  const u = plan.duration_unit || 'month';
-  if (u === 'custom') {
-    return `${t('自定义')} ${plan.custom_seconds || 0}s`;
-  }
-  const unitMap = {
-    year: t('年'),
-    month: t('月'),
-    day: t('日'),
-    hour: t('小时'),
-  };
-  return `${plan.duration_value || 0}${unitMap[u] || u}`;
-}
-
-function formatResetPeriod(plan, t) {
-  const period = plan?.quota_reset_period || 'never';
-  if (period === 'daily') return t('每天');
-  if (period === 'weekly') return t('每周');
-  if (period === 'monthly') return t('每月');
-  if (period === 'custom') {
-    const seconds = Number(plan?.quota_reset_custom_seconds || 0);
-    if (seconds >= 86400) return `${Math.floor(seconds / 86400)} ${t('天')}`;
-    if (seconds >= 3600) return `${Math.floor(seconds / 3600)} ${t('小时')}`;
-    if (seconds >= 60) return `${Math.floor(seconds / 60)} ${t('分钟')}`;
-    return `${seconds} ${t('秒')}`;
-  }
-  return t('不重置');
-}
-
 const renderEnabled = (enabled, t) => {
   return enabled ? (
     <Tag
@@ -86,13 +54,11 @@ const renderEnabled = (enabled, t) => {
   );
 };
 
-// ---- Group columns ----
-
-export const getGroupColumns = ({
+export const getColumns = ({
   t,
-  openEditGroup,
-  setGroupEnabled,
-  deleteGroup,
+  openEditPlan,
+  setPlanEnabled,
+  deletePlan,
 }) => {
   return [
     {
@@ -102,7 +68,7 @@ export const getGroupColumns = ({
       render: (text) => <Text type='tertiary'>#{text}</Text>,
     },
     {
-      title: t('套餐组'),
+      title: t('标题'),
       dataIndex: 'title',
       width: 200,
       render: (text, record) => (
@@ -136,138 +102,58 @@ export const getGroupColumns = ({
         ),
     },
     {
-      title: t('计费周期'),
-      dataIndex: 'plans',
-      width: 100,
-      render: (plans) => (
-        <Text type='secondary'>{(plans || []).length} {t('个')}</Text>
-      ),
-    },
-    {
-      title: t('排序'),
-      dataIndex: 'sort_order',
-      width: 80,
-      render: (text) => <Text type='tertiary'>{Number(text || 0)}</Text>,
-    },
-    {
-      title: t('状态'),
-      dataIndex: 'enabled',
-      width: 80,
-      render: (text) => renderEnabled(text, t),
-    },
-    {
-      title: t('操作'),
-      dataIndex: 'operate',
-      fixed: 'right',
-      width: 200,
-      render: (_, record) => {
-        const isEnabled = record.enabled;
-        const handleToggle = () => {
-          if (isEnabled) {
-            Modal.confirm({
-              title: t('确认禁用'),
-              content: t('禁用后该套餐组下所有计费周期均不会在用户端展示。是否继续？'),
-              centered: true,
-              onOk: () => setGroupEnabled(record.id, false),
-            });
-          } else {
-            Modal.confirm({
-              title: t('确认启用'),
-              content: t('启用后该套餐组将在用户端展示。是否继续？'),
-              centered: true,
-              onOk: () => setGroupEnabled(record.id, true),
-            });
-          }
-        };
-
-        const handleDelete = () => {
-          Modal.confirm({
-            title: t('确认删除'),
-            content: t('删除套餐组将同时删除其下所有计费周期。此操作不可恢复，是否继续？'),
-            centered: true,
-            type: 'danger',
-            onOk: () => deleteGroup(record.id),
-          });
-        };
-
-        return (
-          <Space spacing={8}>
-            <Button
-              theme='light'
-              type='tertiary'
-              size='small'
-              onClick={() => openEditGroup(record)}
-            >
-              {t('编辑')}
-            </Button>
-            {isEnabled ? (
-              <Button
-                theme='light'
-                type='danger'
-                size='small'
-                onClick={handleToggle}
-              >
-                {t('禁用')}
-              </Button>
-            ) : (
-              <Button
-                theme='light'
-                type='primary'
-                size='small'
-                onClick={handleToggle}
-              >
-                {t('启用')}
-              </Button>
-            )}
-            <Button
-              theme='light'
-              type='danger'
-              size='small'
-              onClick={handleDelete}
-            >
-              {t('删除')}
-            </Button>
-          </Space>
-        );
-      },
-    },
-  ];
-};
-
-// ---- Plan variant columns (used in expanded row) ----
-
-export const getPlanVariantColumns = ({
-  t,
-  openEditPlan,
-  setPlanEnabled,
-  enableEpay,
-}) => {
-  return [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      width: 60,
-      render: (text) => <Text type='tertiary'>#{text}</Text>,
-    },
-    {
-      title: t('周期'),
-      width: 100,
-      render: (_, record) => (
-        <Text type='secondary'>{formatDuration(record, t)}</Text>
-      ),
-    },
-    {
-      title: t('价格'),
-      dataIndex: 'price_amount',
-      width: 100,
-      render: (text) => (
+      title: t('月基准价'),
+      dataIndex: 'price_monthly',
+      width: 120,
+      render: (text, record) => (
         <Text strong style={{ color: 'var(--semi-color-success)' }}>
           {convertUSDToCurrency(Number(text || 0), 2)}
+          {record.currency && record.currency !== 'USD' && (
+            <Text type='tertiary' style={{ fontSize: 11, marginLeft: 4 }}>
+              {record.currency}
+            </Text>
+          )}
         </Text>
       ),
     },
     {
-      title: t('总额度'),
+      title: t('付款周期'),
+      width: 220,
+      render: (_, record) => {
+        const periods = [];
+        if (record.monthly_enabled) {
+          periods.push({ label: t('月付'), color: 'blue' });
+        }
+        if (record.quarterly_enabled) {
+          const discount = Number(record.quarterly_discount || 0);
+          periods.push({
+            label: discount > 0 ? `${t('季付')} -${discount}%` : t('季付'),
+            color: 'green',
+          });
+        }
+        if (record.yearly_enabled) {
+          const discount = Number(record.yearly_discount || 0);
+          periods.push({
+            label: discount > 0 ? `${t('年付')} -${discount}%` : t('年付'),
+            color: 'orange',
+          });
+        }
+        if (periods.length === 0) {
+          return <Text type='tertiary'>-</Text>;
+        }
+        return (
+          <Space spacing={4}>
+            {periods.map((p, i) => (
+              <Tag key={i} color={p.color} shape='circle' size='small'>
+                {p.label}
+              </Tag>
+            ))}
+          </Space>
+        );
+      },
+    },
+    {
+      title: t('额度'),
       dataIndex: 'total_amount',
       width: 100,
       render: (text) => {
@@ -286,70 +172,6 @@ export const getPlanVariantColumns = ({
       },
     },
     {
-      title: t('升级分组'),
-      dataIndex: 'upgrade_group',
-      width: 100,
-      render: (text) => (
-        <Text type={text ? 'secondary' : 'tertiary'}>
-          {text || t('不升级')}
-        </Text>
-      ),
-    },
-    {
-      title: t('购买上限'),
-      dataIndex: 'max_purchase_per_user',
-      width: 90,
-      render: (text) => {
-        const limit = Number(text || 0);
-        return (
-          <Text type={limit > 0 ? 'secondary' : 'tertiary'}>
-            {limit > 0 ? limit : t('不限')}
-          </Text>
-        );
-      },
-    },
-    {
-      title: t('重置'),
-      width: 80,
-      render: (_, record) => {
-        const period = record?.quota_reset_period || 'never';
-        const isNever = period === 'never';
-        return (
-          <Text type={isNever ? 'tertiary' : 'secondary'}>
-            {formatResetPeriod(record, t)}
-          </Text>
-        );
-      },
-    },
-    {
-      title: t('支付渠道'),
-      width: 180,
-      render: (_, record) => {
-        const hasStripe = !!record?.stripe_price_id;
-        const hasCreem = !!record?.creem_product_id;
-        const hasEpay = !!enableEpay;
-        return (
-          <Space spacing={4}>
-            {hasStripe && (
-              <Tag color='violet' shape='circle'>
-                Stripe
-              </Tag>
-            )}
-            {hasCreem && (
-              <Tag color='cyan' shape='circle'>
-                Creem
-              </Tag>
-            )}
-            {hasEpay && (
-              <Tag color='light-green' shape='circle'>
-                {t('易支付')}
-              </Tag>
-            )}
-          </Space>
-        );
-      },
-    },
-    {
       title: t('状态'),
       dataIndex: 'enabled',
       width: 80,
@@ -359,25 +181,35 @@ export const getPlanVariantColumns = ({
       title: t('操作'),
       dataIndex: 'operate',
       fixed: 'right',
-      width: 140,
+      width: 200,
       render: (_, record) => {
         const isEnabled = record.enabled;
         const handleToggle = () => {
           if (isEnabled) {
             Modal.confirm({
               title: t('确认禁用'),
-              content: t('禁用后该计费周期不再展示。是否继续？'),
+              content: t('禁用后该订阅套餐不再展示给用户。是否继续？'),
               centered: true,
               onOk: () => setPlanEnabled(record.id, false),
             });
           } else {
             Modal.confirm({
               title: t('确认启用'),
-              content: t('启用后该计费周期将展示给用户。是否继续？'),
+              content: t('启用后该订阅套餐将展示给用户。是否继续？'),
               centered: true,
               onOk: () => setPlanEnabled(record.id, true),
             });
           }
+        };
+
+        const handleDelete = () => {
+          Modal.confirm({
+            title: t('确认删除'),
+            content: t('删除后该订阅套餐将不可恢复。如有用户正在使用此套餐的活跃订阅，将无法删除。是否继续？'),
+            centered: true,
+            type: 'danger',
+            onOk: () => deletePlan(record.id),
+          });
         };
 
         return (
@@ -409,6 +241,14 @@ export const getPlanVariantColumns = ({
                 {t('启用')}
               </Button>
             )}
+            <Button
+              theme='light'
+              type='danger'
+              size='small'
+              onClick={handleDelete}
+            >
+              {t('删除')}
+            </Button>
           </Space>
         );
       },

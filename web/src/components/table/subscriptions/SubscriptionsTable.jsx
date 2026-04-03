@@ -18,119 +18,60 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useMemo } from 'react';
-import { Button, Empty, Table, Typography } from '@douyinfe/semi-ui';
+import { Empty } from '@douyinfe/semi-ui';
 import {
   IllustrationNoResult,
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
-import { IconPlus } from '@douyinfe/semi-icons';
 import CardTable from '../../common/ui/CardTable';
-import { getGroupColumns, getPlanVariantColumns } from './SubscriptionsColumnDefs';
-
-const { Text } = Typography;
+import { getColumns } from './SubscriptionsColumnDefs';
 
 const SubscriptionsTable = ({
-  groups,
+  plans,
   loading,
   compactMode,
-  openEditGroup,
-  setGroupEnabled,
-  deleteGroup,
-  openCreatePlan,
   openEditPlan,
   setPlanEnabled,
-  enableEpay,
+  deletePlan,
   t,
 }) => {
-  const groupColumns = useMemo(() => {
-    return getGroupColumns({
+  const columns = useMemo(() => {
+    return getColumns({
       t,
-      openEditGroup,
-      setGroupEnabled,
-      deleteGroup,
+      openEditPlan,
+      setPlanEnabled,
+      deletePlan,
     });
-  }, [t, openEditGroup, setGroupEnabled, deleteGroup]);
+  }, [t, openEditPlan, setPlanEnabled, deletePlan]);
 
   const tableColumns = useMemo(() => {
     return compactMode
-      ? groupColumns.map((col) => {
+      ? columns.map((col) => {
           if (col.dataIndex === 'operate') {
             const { fixed, ...rest } = col;
             return rest;
           }
           return col;
         })
-      : groupColumns;
-  }, [compactMode, groupColumns]);
-
-  const planColumns = useMemo(() => {
-    return getPlanVariantColumns({
-      t,
-      openEditPlan,
-      setPlanEnabled,
-      enableEpay,
-    });
-  }, [t, openEditPlan, setPlanEnabled, enableEpay]);
-
-  const expandedRowRender = (group) => {
-    const plans = group?.plans || [];
-    return (
-      <div style={{ padding: '8px 0 8px 16px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 8,
-          }}
-        >
-          <Text strong type='secondary'>
-            {t('计费周期')}
-          </Text>
-          <Button
-            icon={<IconPlus />}
-            size='small'
-            theme='light'
-            onClick={() => openCreatePlan(group.id)}
-          >
-            {t('添加周期')}
-          </Button>
-        </div>
-        {plans.length > 0 ? (
-          <Table
-            columns={planColumns}
-            dataSource={plans}
-            pagination={false}
-            rowKey='id'
-            size='small'
-            scroll={{ x: 'max-content' }}
-          />
-        ) : (
-          <Text type='tertiary' style={{ padding: '16px 0', display: 'block', textAlign: 'center' }}>
-            {t('暂无计费周期，点击上方按钮添加')}
-          </Text>
-        )}
-      </div>
-    );
-  };
+      : columns;
+  }, [compactMode, columns]);
 
   return (
     <CardTable
       columns={tableColumns}
-      dataSource={groups}
+      dataSource={plans}
       scroll={compactMode ? undefined : { x: 'max-content' }}
       pagination={false}
       hidePagination={true}
       loading={loading}
       rowKey='id'
-      expandedRowRender={expandedRowRender}
       empty={
         <Empty
           image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}
           darkModeImage={
             <IllustrationNoResultDark style={{ width: 150, height: 150 }} />
           }
-          description={t('暂无套餐组')}
+          description={t('暂无订阅套餐')}
           style={{ padding: 30 }}
         />
       }

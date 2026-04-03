@@ -40,6 +40,7 @@ import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
 import ScanPayModal from './modals/WechatPayModal';
+import { sortBySortOrderThenAmount } from '../../helpers/subscriptionFormat';
 
 const TopUp = () => {
   const { t } = useTranslation();
@@ -119,7 +120,7 @@ const TopUp = () => {
   const [activeSubscriptions, setActiveSubscriptions] = useState([]);
   const [allSubscriptions, setAllSubscriptions] = useState([]);
 
-  // 预设充值额度选项
+  // 预设充值额度选项（来自充值档位）
   const [presetAmounts, setPresetAmounts] = useState([]);
   const [selectedPreset, setSelectedPreset] = useState(null);
 
@@ -472,6 +473,27 @@ const TopUp = () => {
     }
   };
 
+  // 获取充值档位 → 直接作为预设充值额度
+  const getTopupTiers = async () => {
+    try {
+      const res = await API.get('/api/topup/tiers');
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        const tiers = sortBySortOrderThenAmount(res.data.data);
+        setPresetAmounts(tiers.map((tier) => ({
+          value: tier.amount,
+          discount: tier.discount != null && tier.discount < 1 ? tier.discount : 1.0,
+          title: tier.title,
+          subtitle: tier.subtitle,
+          tag: tier.tag,
+          features: tier.features,
+          bonus_quota: tier.bonus_quota,
+        })));
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   const updateBillingPreference = async (pref) => {
     const previousPref = billingPreference;
     setBillingPreference(pref);
@@ -598,11 +620,6 @@ const TopUp = () => {
             setCreemProducts([]);
           }
 
-          // 如果没有自定义充值数量选项，根据最小充值金额生成预设充值额度选项
-          if (topupInfo.amount_options.length === 0) {
-            setPresetAmounts(generatePresetAmounts(minTopUpValue));
-          }
-
           // 初始化显示实付金额（根据启用的支付方式调用对应的接口）
           if (enableOnlineTopUp) {
             getAmount(minTopUpValue);
@@ -615,15 +632,6 @@ const TopUp = () => {
           }
         } catch (e) {
           setPayMethods([]);
-        }
-
-        // 如果有自定义充值数量选项，使用它们替换默认的预设选项
-        if (data.amount_options && data.amount_options.length > 0) {
-          const customPresets = data.amount_options.map((amount) => ({
-            value: amount,
-            discount: data.discount[amount] || 1.0,
-          }));
-          setPresetAmounts(customPresets);
         }
       } else {
         showError(data || t('获取充值配置失败'));
@@ -694,6 +702,7 @@ const TopUp = () => {
   // 在 statusState 可用时获取充值信息
   useEffect(() => {
     getTopupInfo().then();
+    getTopupTiers().then();
     getSubscriptionPlans().then();
     getSubscriptionSelf().then();
   }, []);
@@ -867,14 +876,6 @@ const TopUp = () => {
   // 格式化大数字显示
   const formatLargeNumber = (num) => {
     return num.toString();
-  };
-
-  // 根据最小充值金额生成预设充值额度选项
-  const generatePresetAmounts = (minAmount) => {
-    const multipliers = [1, 5, 10, 30, 50, 100, 300, 500];
-    return multipliers.map((multiplier) => ({
-      value: minAmount * multiplier,
-    }));
   };
 
   return (

@@ -18,13 +18,18 @@ import (
 )
 
 type SubscriptionStripePayRequest struct {
-	PlanId int `json:"plan_id"`
+	PlanId     int    `json:"plan_id"`
+	PeriodType string `json:"period_type"`
 }
 
 func SubscriptionRequestStripePay(c *gin.Context) {
 	var req SubscriptionStripePayRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.PlanId <= 0 {
 		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if !model.ValidatePeriodType(req.PeriodType) {
+		common.ApiErrorMsg(c, "无效的付款周期")
 		return
 	}
 
@@ -37,7 +42,12 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		common.ApiErrorMsg(c, "套餐未启用")
 		return
 	}
-	if plan.StripePriceId == "" {
+	if !plan.IsPeriodEnabled(req.PeriodType) {
+		common.ApiErrorMsg(c, "该付款周期未启用")
+		return
+	}
+	stripePriceId := plan.GetStripePriceId(req.PeriodType)
+	if stripePriceId == "" {
 		common.ApiErrorMsg(c, "该套餐未配置 StripePriceId")
 		return
 	}
@@ -73,10 +83,11 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		}
 	}
 
+	price := plan.CalcPeriodPrice(req.PeriodType)
 	reference := fmt.Sprintf("sub-stripe-ref-%d-%d-%s", user.Id, time.Now().UnixMilli(), randstr.String(4))
 	referenceId := "sub_ref_" + common.Sha1([]byte(reference))
 
-	payLink, err := genStripeSubscriptionLink(referenceId, user.StripeCustomer, user.Email, plan.StripePriceId)
+	payLink, err := genStripeSubscriptionLink(referenceId, user.StripeCustomer, user.Email, stripePriceId)
 	if err != nil {
 		log.Println("获取Stripe Checkout支付链接失败", err)
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "拉起支付失败"})
@@ -86,7 +97,8 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 	order := &model.SubscriptionOrder{
 		UserId:        userId,
 		PlanId:        plan.Id,
-		Money:         plan.PriceAmount,
+		PeriodType:    req.PeriodType,
+		Money:         price,
 		TradeNo:       referenceId,
 		PaymentMethod: PaymentMethodStripe,
 		CreateTime:    time.Now().Unix(),

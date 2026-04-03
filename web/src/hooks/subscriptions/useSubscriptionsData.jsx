@@ -26,33 +26,28 @@ export const useSubscriptionsData = () => {
   const { t } = useTranslation();
   const [compactMode, setCompactMode] = useTableCompactMode('subscriptions');
 
-  // State management — groups with nested plans
-  const [allGroups, setAllGroups] = useState([]);
+  // State management — flat plan list
+  const [allPlans, setAllPlans] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Pagination (client-side)
   const [activePage, setActivePage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Drawer states for group editing
-  const [showGroupEdit, setShowGroupEdit] = useState(false);
-  const [editingGroup, setEditingGroup] = useState(null);
-
-  // Drawer states for plan variant editing
+  // Drawer states for plan editing
   const [showPlanEdit, setShowPlanEdit] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
-  const [editingPlanGroupId, setEditingPlanGroupId] = useState(null);
 
   const [sheetPlacement, setSheetPlacement] = useState('right');
 
-  // Load groups with plans
-  const loadGroups = useCallback(async () => {
+  // Load plans
+  const loadPlans = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await API.get('/api/subscription/admin/groups');
+      const res = await API.get('/api/subscription/admin/plans');
       if (res.data?.success) {
         const next = res.data.data || [];
-        setAllGroups(next);
+        setAllPlans(next);
         const totalPages = Math.max(1, Math.ceil(next.length / pageSize));
         setActivePage((p) => Math.min(p || 1, totalPages));
       } else {
@@ -66,73 +61,22 @@ export const useSubscriptionsData = () => {
   }, [pageSize, t]);
 
   const refresh = useCallback(async () => {
-    await loadGroups();
-  }, [loadGroups]);
+    await loadPlans();
+  }, [loadPlans]);
 
   useEffect(() => {
-    loadGroups();
-  }, [loadGroups]);
+    loadPlans();
+  }, [loadPlans]);
 
-  // Group actions
-  const openCreateGroup = useCallback(() => {
-    setEditingGroup(null);
-    setSheetPlacement('right');
-    setShowGroupEdit(true);
-  }, []);
-
-  const openEditGroup = useCallback((group) => {
-    setEditingGroup(group);
-    setSheetPlacement('right');
-    setShowGroupEdit(true);
-  }, []);
-
-  const closeGroupEdit = useCallback(() => {
-    setShowGroupEdit(false);
-    setEditingGroup(null);
-  }, []);
-
-  const setGroupEnabled = useCallback(async (groupId, enabled) => {
-    setLoading(true);
-    try {
-      const res = await API.patch(`/api/subscription/admin/groups/${groupId}`, { enabled: !!enabled });
-      if (res.data?.success) {
-        showSuccess(enabled ? t('已启用') : t('已禁用'));
-        await loadGroups();
-      } else {
-        showError(res.data?.message || t('操作失败'));
-      }
-    } catch (e) {
-      showError(t('请求失败'));
-    } finally {
-      setLoading(false);
-    }
-  }, [t, loadGroups]);
-
-  const deleteGroup = useCallback(async (groupId) => {
-    try {
-      const res = await API.delete(`/api/subscription/admin/groups/${groupId}`);
-      if (res.data?.success) {
-        showSuccess(t('删除成功'));
-        await loadGroups();
-      } else {
-        showError(res.data?.message || t('删除失败'));
-      }
-    } catch (e) {
-      showError(t('删除失败'));
-    }
-  }, [t, loadGroups]);
-
-  // Plan variant actions
-  const openCreatePlan = useCallback((groupId) => {
+  // Plan actions
+  const openCreatePlan = useCallback(() => {
     setEditingPlan(null);
-    setEditingPlanGroupId(groupId);
     setSheetPlacement('right');
     setShowPlanEdit(true);
   }, []);
 
   const openEditPlan = useCallback((plan) => {
     setEditingPlan(plan);
-    setEditingPlanGroupId(plan.group_id);
     setSheetPlacement('right');
     setShowPlanEdit(true);
   }, []);
@@ -140,7 +84,6 @@ export const useSubscriptionsData = () => {
   const closePlanEdit = useCallback(() => {
     setShowPlanEdit(false);
     setEditingPlan(null);
-    setEditingPlanGroupId(null);
   }, []);
 
   const setPlanEnabled = useCallback(async (planId, enabled) => {
@@ -149,7 +92,7 @@ export const useSubscriptionsData = () => {
       const res = await API.patch(`/api/subscription/admin/plans/${planId}`, { enabled: !!enabled });
       if (res.data?.success) {
         showSuccess(enabled ? t('已启用') : t('已禁用'));
-        await loadGroups();
+        await loadPlans();
       } else {
         showError(res.data?.message || t('操作失败'));
       }
@@ -158,37 +101,42 @@ export const useSubscriptionsData = () => {
     } finally {
       setLoading(false);
     }
-  }, [t, loadGroups]);
+  }, [t, loadPlans]);
 
-  const groupCount = allGroups.length;
-  const groups = allGroups.slice(
+  const deletePlan = useCallback(async (planId) => {
+    try {
+      const res = await API.delete(`/api/subscription/admin/plans/${planId}`);
+      if (res.data?.success) {
+        showSuccess(t('删除成功'));
+        await loadPlans();
+      } else {
+        showError(res.data?.message || t('删除失败'));
+      }
+    } catch (e) {
+      showError(t('删除失败'));
+    }
+  }, [t, loadPlans]);
+
+  const planCount = allPlans.length;
+  const plans = allPlans.slice(
     Math.max(0, (activePage - 1) * pageSize),
     Math.max(0, (activePage - 1) * pageSize) + pageSize,
   );
 
   return {
     // Data state
-    groups,
-    groupCount,
+    plans,
+    planCount,
     loading,
-
-    // Group modal state
-    showGroupEdit,
-    editingGroup,
-    openCreateGroup,
-    openEditGroup,
-    closeGroupEdit,
-    setGroupEnabled,
-    deleteGroup,
 
     // Plan modal state
     showPlanEdit,
     editingPlan,
-    editingPlanGroupId,
     openCreatePlan,
     openEditPlan,
     closePlanEdit,
     setPlanEnabled,
+    deletePlan,
 
     sheetPlacement,
 

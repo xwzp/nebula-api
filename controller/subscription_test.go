@@ -40,8 +40,9 @@ func setupSubscriptionTestDB(t *testing.T) *gorm.DB {
 	model.LOG_DB = db
 
 	if err := db.AutoMigrate(
-		&model.SubscriptionPlanGroup{},
 		&model.SubscriptionPlan{},
+		&model.SubscriptionOrder{},
+		&model.UserSubscription{},
 		&model.TopupTier{},
 	); err != nil {
 		t.Fatalf("failed to migrate tables: %v", err)
@@ -57,31 +58,22 @@ func setupSubscriptionTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func seedGroup(t *testing.T, db *gorm.DB, title string) *model.SubscriptionPlanGroup {
-	t.Helper()
-	group := &model.SubscriptionPlanGroup{
-		Title:    title,
-		Subtitle: title + " subtitle",
-		Tag:      "popular",
-		Features: `[{"text":"Feature 1","icon":"check","style":"default"}]`,
-		Enabled:  true,
-	}
-	if err := db.Create(group).Error; err != nil {
-		t.Fatalf("failed to create group: %v", err)
-	}
-	return group
-}
-
-func seedPlan(t *testing.T, db *gorm.DB, groupID int, priceAmount float64, durationUnit string) *model.SubscriptionPlan {
+func seedPlan(t *testing.T, db *gorm.DB, title string, priceMonthly float64) *model.SubscriptionPlan {
 	t.Helper()
 	plan := &model.SubscriptionPlan{
-		GroupID:       groupID,
-		PriceAmount:   priceAmount,
-		Currency:      "USD",
-		DurationUnit:  durationUnit,
-		DurationValue: 1,
-		TotalAmount:   500000,
-		Enabled:       true,
+		Title:            title,
+		Subtitle:         title + " subtitle",
+		Tag:              "popular",
+		Features:         `[{"text":"Feature 1","icon":"check","style":"default"}]`,
+		PriceMonthly:     priceMonthly,
+		Currency:         "USD",
+		MonthlyEnabled:   true,
+		QuarterlyEnabled: true,
+		QuarterlyDiscount: 10,
+		YearlyEnabled:    true,
+		YearlyDiscount:   20,
+		TotalAmount:      500000,
+		Enabled:          true,
 	}
 	if err := db.Create(plan).Error; err != nil {
 		t.Fatalf("failed to create plan: %v", err)
@@ -137,28 +129,35 @@ func decodeResp(t *testing.T, recorder *httptest.ResponseRecorder) apiResponse {
 	return resp
 }
 
-// ---- Subscription Plan Group Tests ----
+// ---- Subscription Plan Tests ----
 
-func TestAdminCreateSubscriptionPlanGroup(t *testing.T) {
+func TestAdminCreateSubscriptionPlan(t *testing.T) {
 	setupSubscriptionTestDB(t)
 
 	body := map[string]interface{}{
-		"title":    "Pro Plan",
-		"subtitle": "Best value",
-		"tag":      "推荐",
-		"features": `[{"text":"Unlimited access","icon":"check","style":"highlight"}]`,
+		"title":            "Pro Plan",
+		"subtitle":         "Best value",
+		"tag":              "推荐",
+		"price_monthly":    9.99,
+		"monthly_enabled":  true,
+		"quarterly_enabled": true,
+		"quarterly_discount": 15,
+		"yearly_enabled":   true,
+		"yearly_discount":  25,
+		"total_amount":     500000,
+		"features":         `[{"text":"Unlimited access","icon":"check","style":"highlight"}]`,
 	}
-	ctx, recorder := newCtx(t, http.MethodPost, "/api/subscription/admin/groups", body)
-	AdminCreateSubscriptionPlanGroup(ctx)
+	ctx, recorder := newCtx(t, http.MethodPost, "/api/subscription/admin/plans", body)
+	AdminCreateSubscriptionPlan(ctx)
 
 	resp := decodeResp(t, recorder)
 	if !resp.Success {
 		t.Fatalf("expected success, got: %s", resp.Message)
 	}
 
-	var created model.SubscriptionPlanGroup
+	var created model.SubscriptionPlan
 	if err := common.Unmarshal(resp.Data, &created); err != nil {
-		t.Fatalf("failed to decode created group: %v", err)
+		t.Fatalf("failed to decode created plan: %v", err)
 	}
 	if created.Title != "Pro Plan" {
 		t.Errorf("expected title 'Pro Plan', got %q", created.Title)
@@ -168,14 +167,15 @@ func TestAdminCreateSubscriptionPlanGroup(t *testing.T) {
 	}
 }
 
-func TestAdminCreateGroupEmptyTitleFails(t *testing.T) {
+func TestAdminCreatePlanEmptyTitleFails(t *testing.T) {
 	setupSubscriptionTestDB(t)
 
 	body := map[string]interface{}{
-		"title": "  ",
+		"title":         "  ",
+		"price_monthly": 9.99,
 	}
-	ctx, recorder := newCtx(t, http.MethodPost, "/api/subscription/admin/groups", body)
-	AdminCreateSubscriptionPlanGroup(ctx)
+	ctx, recorder := newCtx(t, http.MethodPost, "/api/subscription/admin/plans", body)
+	AdminCreateSubscriptionPlan(ctx)
 
 	resp := decodeResp(t, recorder)
 	if resp.Success {
@@ -183,81 +183,35 @@ func TestAdminCreateGroupEmptyTitleFails(t *testing.T) {
 	}
 }
 
-func TestAdminListGroupsWithPlans(t *testing.T) {
+func TestAdminListPlans(t *testing.T) {
 	db := setupSubscriptionTestDB(t)
-	g := seedGroup(t, db, "Basic")
-	seedPlan(t, db, g.Id, 9.99, "month")
-	seedPlan(t, db, g.Id, 99.99, "year")
+	seedPlan(t, db, "Basic", 9.99)
+	seedPlan(t, db, "Pro", 19.99)
 
-	ctx, recorder := newCtx(t, http.MethodGet, "/api/subscription/admin/groups", nil)
-	AdminListSubscriptionPlanGroups(ctx)
+	ctx, recorder := newCtx(t, http.MethodGet, "/api/subscription/admin/plans", nil)
+	AdminListSubscriptionPlans(ctx)
 
 	resp := decodeResp(t, recorder)
 	if !resp.Success {
 		t.Fatalf("expected success: %s", resp.Message)
 	}
 
-	var groups []GroupWithPlans
-	if err := common.Unmarshal(resp.Data, &groups); err != nil {
-		t.Fatalf("failed to decode groups: %v", err)
+	var plans []model.SubscriptionPlan
+	if err := common.Unmarshal(resp.Data, &plans); err != nil {
+		t.Fatalf("failed to decode plans: %v", err)
 	}
-	if len(groups) != 1 {
-		t.Fatalf("expected 1 group, got %d", len(groups))
-	}
-	if len(groups[0].Plans) != 2 {
-		t.Errorf("expected 2 plans, got %d", len(groups[0].Plans))
+	if len(plans) != 2 {
+		t.Fatalf("expected 2 plans, got %d", len(plans))
 	}
 }
 
-func TestAdminUpdateSubscriptionPlanGroup(t *testing.T) {
+func TestAdminDeletePlanSucceeds(t *testing.T) {
 	db := setupSubscriptionTestDB(t)
-	g := seedGroup(t, db, "Old Title")
+	plan := seedPlan(t, db, "Delete Me", 9.99)
 
-	body := map[string]interface{}{
-		"title":    "New Title",
-		"subtitle": "Updated subtitle",
-	}
-	ctx, recorder := newCtx(t, http.MethodPut, "/api/subscription/admin/groups/"+strconv.Itoa(g.Id), body)
-	ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(g.Id)}}
-	AdminUpdateSubscriptionPlanGroup(ctx)
-
-	resp := decodeResp(t, recorder)
-	if !resp.Success {
-		t.Fatalf("expected success: %s", resp.Message)
-	}
-
-	// Verify in DB
-	updated, err := model.GetSubscriptionPlanGroupById(g.Id)
-	if err != nil {
-		t.Fatalf("failed to get updated group: %v", err)
-	}
-	if updated.Title != "New Title" {
-		t.Errorf("expected title 'New Title', got %q", updated.Title)
-	}
-}
-
-func TestAdminDeleteGroupWithPlansFails(t *testing.T) {
-	db := setupSubscriptionTestDB(t)
-	g := seedGroup(t, db, "Has Plans")
-	seedPlan(t, db, g.Id, 9.99, "month")
-
-	ctx, recorder := newCtx(t, http.MethodDelete, "/api/subscription/admin/groups/"+strconv.Itoa(g.Id), nil)
-	ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(g.Id)}}
-	AdminDeleteSubscriptionPlanGroup(ctx)
-
-	resp := decodeResp(t, recorder)
-	if resp.Success {
-		t.Fatalf("expected failure when deleting group with plans")
-	}
-}
-
-func TestAdminDeleteEmptyGroupSucceeds(t *testing.T) {
-	db := setupSubscriptionTestDB(t)
-	g := seedGroup(t, db, "Empty Group")
-
-	ctx, recorder := newCtx(t, http.MethodDelete, "/api/subscription/admin/groups/"+strconv.Itoa(g.Id), nil)
-	ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(g.Id)}}
-	AdminDeleteSubscriptionPlanGroup(ctx)
+	ctx, recorder := newCtx(t, http.MethodDelete, "/api/subscription/admin/plans/"+strconv.Itoa(plan.Id), nil)
+	ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(plan.Id)}}
+	AdminDeleteSubscriptionPlan(ctx)
 
 	resp := decodeResp(t, recorder)
 	if !resp.Success {
@@ -265,89 +219,31 @@ func TestAdminDeleteEmptyGroupSucceeds(t *testing.T) {
 	}
 }
 
-func TestAdminGroupStatusToggle(t *testing.T) {
+func TestAdminPlanStatusToggle(t *testing.T) {
 	db := setupSubscriptionTestDB(t)
-	g := seedGroup(t, db, "Toggle Me")
+	plan := seedPlan(t, db, "Toggle Me", 9.99)
 
-	body := map[string]interface{}{"enabled": false}
-	ctx, recorder := newCtx(t, http.MethodPatch, "/api/subscription/admin/groups/"+strconv.Itoa(g.Id), body)
-	ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(g.Id)}}
-	AdminUpdateSubscriptionPlanGroupStatus(ctx)
+	enabled := false
+	body := map[string]interface{}{"enabled": enabled}
+	ctx, recorder := newCtx(t, http.MethodPatch, "/api/subscription/admin/plans/"+strconv.Itoa(plan.Id), body)
+	ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(plan.Id)}}
+	AdminUpdateSubscriptionPlanStatus(ctx)
 
 	resp := decodeResp(t, recorder)
 	if !resp.Success {
 		t.Fatalf("expected success: %s", resp.Message)
-	}
-
-	updated, _ := model.GetSubscriptionPlanGroupById(g.Id)
-	if updated.Enabled {
-		t.Errorf("expected group to be disabled")
-	}
-}
-
-// ---- Subscription Plan Under Group Tests ----
-
-func TestAdminCreatePlanUnderGroup(t *testing.T) {
-	db := setupSubscriptionTestDB(t)
-	g := seedGroup(t, db, "Pro")
-
-	body := map[string]interface{}{
-		"plan": map[string]interface{}{
-			"price_amount":   19.99,
-			"duration_unit":  "month",
-			"duration_value": 1,
-			"total_amount":   500000,
-		},
-	}
-	ctx, recorder := newCtx(t, http.MethodPost, "/api/subscription/admin/groups/"+strconv.Itoa(g.Id)+"/plans", body)
-	ctx.Params = gin.Params{{Key: "id", Value: strconv.Itoa(g.Id)}}
-	AdminCreateSubscriptionPlan(ctx)
-
-	resp := decodeResp(t, recorder)
-	if !resp.Success {
-		t.Fatalf("expected success: %s", resp.Message)
-	}
-
-	var plan model.SubscriptionPlan
-	if err := common.Unmarshal(resp.Data, &plan); err != nil {
-		t.Fatalf("failed to decode plan: %v", err)
-	}
-	if plan.GroupID != g.Id {
-		t.Errorf("expected group_id %d, got %d", g.Id, plan.GroupID)
-	}
-}
-
-func TestAdminCreatePlanWithoutGroupFails(t *testing.T) {
-	setupSubscriptionTestDB(t)
-
-	body := map[string]interface{}{
-		"plan": map[string]interface{}{
-			"price_amount":  19.99,
-			"duration_unit": "month",
-			"total_amount":  500000,
-		},
-	}
-	ctx, recorder := newCtx(t, http.MethodPost, "/api/subscription/admin/groups/0/plans", body)
-	ctx.Params = gin.Params{{Key: "id", Value: "0"}}
-	AdminCreateSubscriptionPlan(ctx)
-
-	resp := decodeResp(t, recorder)
-	if resp.Success {
-		t.Fatalf("expected failure for plan without group")
 	}
 }
 
 // ---- Public API Tests ----
 
-func TestGetPublicSubscriptionPlansGroupedResponse(t *testing.T) {
+func TestGetPublicSubscriptionPlans(t *testing.T) {
 	db := setupSubscriptionTestDB(t)
-	g := seedGroup(t, db, "Starter")
-	seedPlan(t, db, g.Id, 5.99, "month")
-	seedPlan(t, db, g.Id, 59.99, "year")
+	seedPlan(t, db, "Starter", 5.99)
 
-	// Also create a disabled group - should not appear
-	disabled := seedGroup(t, db, "Disabled Group")
-	db.Model(&model.SubscriptionPlanGroup{}).Where("id = ?", disabled.Id).Update("enabled", false)
+	// Also create a disabled plan - should not appear
+	disabled := seedPlan(t, db, "Disabled Plan", 19.99)
+	db.Model(&model.SubscriptionPlan{}).Where("id = ?", disabled.Id).Update("enabled", false)
 
 	ctx, recorder := newCtx(t, http.MethodGet, "/api/subscription/public-plans", nil)
 	GetPublicSubscriptionPlans(ctx)
@@ -357,48 +253,24 @@ func TestGetPublicSubscriptionPlansGroupedResponse(t *testing.T) {
 		t.Fatalf("expected success: %s", resp.Message)
 	}
 
-	var groups []PublicPlanGroupDTO
-	if err := common.Unmarshal(resp.Data, &groups); err != nil {
-		t.Fatalf("failed to decode public groups: %v", err)
+	var plans []PublicSubscriptionPlanDTO
+	if err := common.Unmarshal(resp.Data, &plans); err != nil {
+		t.Fatalf("failed to decode public plans: %v", err)
 	}
-	if len(groups) != 1 {
-		t.Fatalf("expected 1 enabled group, got %d", len(groups))
+	if len(plans) != 1 {
+		t.Fatalf("expected 1 enabled plan, got %d", len(plans))
 	}
-	if groups[0].Title != "Starter" {
-		t.Errorf("expected title 'Starter', got %q", groups[0].Title)
+	if plans[0].Title != "Starter" {
+		t.Errorf("expected title 'Starter', got %q", plans[0].Title)
 	}
-	if len(groups[0].Plans) != 2 {
-		t.Errorf("expected 2 plan variants, got %d", len(groups[0].Plans))
-	}
-}
-
-func TestGetPublicPlansSkipsGroupsWithNoPlans(t *testing.T) {
-	db := setupSubscriptionTestDB(t)
-	seedGroup(t, db, "Empty Group") // no plans
-
-	ctx, recorder := newCtx(t, http.MethodGet, "/api/subscription/public-plans", nil)
-	GetPublicSubscriptionPlans(ctx)
-
-	resp := decodeResp(t, recorder)
-	if !resp.Success {
-		t.Fatalf("expected success: %s", resp.Message)
-	}
-
-	var groups []PublicPlanGroupDTO
-	if err := common.Unmarshal(resp.Data, &groups); err != nil {
-		t.Fatalf("failed to decode: %v", err)
-	}
-	if len(groups) != 0 {
-		t.Errorf("expected 0 groups (no plans), got %d", len(groups))
+	if plans[0].Periods["monthly"].Price != 5.99 {
+		t.Errorf("expected monthly price 5.99, got %f", plans[0].Periods["monthly"].Price)
 	}
 }
 
-func TestGetSubscriptionPlansEnrichesGroupFields(t *testing.T) {
+func TestGetSubscriptionPlansReturnsEnabled(t *testing.T) {
 	db := setupSubscriptionTestDB(t)
-	g := seedGroup(t, db, "Premium")
-	// Invalidate any stale cache entry from previous tests (cache is global)
-	model.InvalidateSubscriptionPlanGroupCache(g.Id)
-	seedPlan(t, db, g.Id, 29.99, "month")
+	seedPlan(t, db, "Premium", 29.99)
 
 	ctx, recorder := newCtx(t, http.MethodGet, "/api/subscription/plans", nil)
 	GetSubscriptionPlans(ctx)
@@ -408,18 +280,15 @@ func TestGetSubscriptionPlansEnrichesGroupFields(t *testing.T) {
 		t.Fatalf("expected success: %s", resp.Message)
 	}
 
-	var plans []SubscriptionPlanDTO
+	var plans []model.SubscriptionPlan
 	if err := common.Unmarshal(resp.Data, &plans); err != nil {
 		t.Fatalf("failed to decode: %v", err)
 	}
 	if len(plans) != 1 {
 		t.Fatalf("expected 1 plan, got %d", len(plans))
 	}
-	if plans[0].GroupTitle != "Premium" {
-		t.Errorf("expected group_title 'Premium', got %q", plans[0].GroupTitle)
-	}
-	if plans[0].GroupSubtitle == "" {
-		t.Errorf("expected non-empty group_subtitle")
+	if plans[0].Title != "Premium" {
+		t.Errorf("expected title 'Premium', got %q", plans[0].Title)
 	}
 }
 
@@ -603,7 +472,7 @@ func TestTopupTierInvalidDiscountNormalized(t *testing.T) {
 	body := map[string]interface{}{
 		"title":    "Bad Discount",
 		"amount":   10,
-		"discount": 1.5, // > 1, should be normalized to 1.0
+		"discount": 1.5,
 	}
 	ctx, recorder := newCtx(t, http.MethodPost, "/api/topup/admin/tiers", body)
 	AdminCreateTopupTier(ctx)
