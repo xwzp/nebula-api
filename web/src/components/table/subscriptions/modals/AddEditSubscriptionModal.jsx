@@ -68,6 +68,7 @@ const AddEditSubscriptionModal = ({
   visible,
   handleClose,
   editingPlan,
+  groupId,
   placement = 'left',
   refresh,
   t,
@@ -77,12 +78,10 @@ const AddEditSubscriptionModal = ({
   const [groupLoading, setGroupLoading] = useState(false);
   const isMobile = useIsMobile();
   const formApiRef = useRef(null);
-  const isEdit = editingPlan?.plan?.id !== undefined;
-  const formKey = isEdit ? `edit-${editingPlan?.plan?.id}` : 'create';
+  const isEdit = editingPlan?.id !== undefined;
+  const formKey = isEdit ? `edit-${editingPlan?.id}` : `create-${groupId}`;
 
   const getInitValues = () => ({
-    title: '',
-    subtitle: '',
     price_amount: 0,
     currency: 'USD',
     duration_unit: 'month',
@@ -101,12 +100,10 @@ const AddEditSubscriptionModal = ({
 
   const buildFormValues = () => {
     const base = getInitValues();
-    if (editingPlan?.plan?.id === undefined) return base;
-    const p = editingPlan.plan || {};
+    if (!isEdit) return base;
+    const p = editingPlan || {};
     return {
       ...base,
-      title: p.title || '',
-      subtitle: p.subtitle || '',
       price_amount: Number(p.price_amount || 0),
       currency: 'USD',
       duration_unit: p.duration_unit || 'month',
@@ -142,15 +139,12 @@ const AddEditSubscriptionModal = ({
   }, [visible]);
 
   const submit = async (values) => {
-    if (!values.title || values.title.trim() === '') {
-      showError(t('套餐标题不能为空'));
-      return;
-    }
     setLoading(true);
     try {
       const payload = {
         plan: {
           ...values,
+          group_id: groupId,
           price_amount: Number(values.price_amount || 0),
           currency: 'USD',
           duration_value: Number(values.duration_value || 0),
@@ -166,9 +160,9 @@ const AddEditSubscriptionModal = ({
           upgrade_group: values.upgrade_group || '',
         },
       };
-      if (editingPlan?.plan?.id) {
+      if (isEdit) {
         const res = await API.put(
-          `/api/subscription/admin/plans/${editingPlan.plan.id}`,
+          `/api/subscription/admin/plans/${editingPlan.id}`,
           payload,
         );
         if (res.data?.success) {
@@ -179,7 +173,10 @@ const AddEditSubscriptionModal = ({
           showError(res.data?.message || t('更新失败'));
         }
       } else {
-        const res = await API.post('/api/subscription/admin/plans', payload);
+        const res = await API.post(
+          `/api/subscription/admin/groups/${groupId}/plans`,
+          payload,
+        );
         if (res.data?.success) {
           showSuccess(t('创建成功'));
           handleClose();
@@ -211,7 +208,7 @@ const AddEditSubscriptionModal = ({
               </Tag>
             )}
             <Title heading={4} className='m-0'>
-              {isEdit ? t('更新套餐信息') : t('创建新的订阅套餐')}
+              {isEdit ? t('编辑计费周期') : t('添加计费周期')}
             </Title>
           </Space>
         }
@@ -264,37 +261,15 @@ const AddEditSubscriptionModal = ({
                     </Avatar>
                     <div>
                       <Text className='text-lg font-medium'>
-                        {t('基本信息')}
+                        {t('定价与额度')}
                       </Text>
                       <div className='text-xs text-gray-600'>
-                        {t('套餐的基本信息和定价')}
+                        {t('计费周期的定价和额度配置')}
                       </div>
                     </div>
                   </div>
 
                   <Row gutter={12}>
-                    <Col span={24}>
-                      <Form.Input
-                        field='title'
-                        label={t('套餐标题')}
-                        placeholder={t('例如：基础套餐')}
-                        required
-                        rules={[
-                          { required: true, message: t('请输入套餐标题') },
-                        ]}
-                        showClear
-                      />
-                    </Col>
-
-                    <Col span={24}>
-                      <Form.Input
-                        field='subtitle'
-                        label={t('套餐副标题')}
-                        placeholder={t('例如：适合轻度使用')}
-                        showClear
-                      />
-                    </Col>
-
                     <Col span={12}>
                       <Form.InputNumber
                         field='price_amount'
@@ -396,7 +371,7 @@ const AddEditSubscriptionModal = ({
                         {t('有效期设置')}
                       </Text>
                       <div className='text-xs text-gray-600'>
-                        {t('配置套餐的有效时长')}
+                        {t('配置计费周期的有效时长')}
                       </div>
                     </div>
                   </div>

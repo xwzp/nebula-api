@@ -17,7 +17,10 @@ import (
 // ---- Shared types ----
 
 type SubscriptionPlanDTO struct {
-	Plan model.SubscriptionPlan `json:"plan"`
+	Plan          model.SubscriptionPlan `json:"plan"`
+	GroupTitle    string                 `json:"group_title,omitempty"`
+	GroupSubtitle string                 `json:"group_subtitle,omitempty"`
+	GroupTag      string                 `json:"group_tag,omitempty"`
 }
 
 type BillingPreferenceRequest struct {
@@ -166,11 +169,24 @@ func GetSubscriptionPlans(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Pre-load group titles for enrichment
+	groupCache := make(map[int]*model.SubscriptionPlanGroup)
 	result := make([]SubscriptionPlanDTO, 0, len(plans))
 	for _, p := range plans {
-		result = append(result, SubscriptionPlanDTO{
-			Plan: p,
-		})
+		dto := SubscriptionPlanDTO{Plan: p}
+		if p.GroupID > 0 {
+			g, ok := groupCache[p.GroupID]
+			if !ok {
+				g, _ = model.GetSubscriptionPlanGroupById(p.GroupID)
+				groupCache[p.GroupID] = g // may be nil
+			}
+			if g != nil {
+				dto.GroupTitle = g.Title
+				dto.GroupSubtitle = g.Subtitle
+				dto.GroupTag = g.Tag
+			}
+		}
+		result = append(result, dto)
 	}
 	common.ApiSuccess(c, result)
 }

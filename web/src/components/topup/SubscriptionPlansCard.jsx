@@ -261,7 +261,7 @@ const SubscriptionPlansCard = ({
     (plans || []).forEach((p) => {
       const plan = p?.plan;
       if (!plan?.id) return;
-      map.set(plan.id, plan.title || '');
+      map.set(plan.id, p.group_title || '');
     });
     return map;
   }, [plans]);
@@ -569,23 +569,23 @@ const SubscriptionPlansCard = ({
                           </Tag>
                         </div>
                       )}
-                      {/* 套餐名称 */}
+                      {/* 套餐名称 (from group) */}
                       <div className='mb-3'>
                         <Typography.Title
                           heading={5}
                           ellipsis={{ rows: 1, showTooltip: true }}
                           style={{ margin: 0 }}
                         >
-                          {plan?.title || t('订阅套餐')}
+                          {p.group_title || t('订阅套餐')}
                         </Typography.Title>
-                        {plan?.subtitle && (
+                        {p.group_subtitle && (
                           <Text
                             type='tertiary'
                             size='small'
                             ellipsis={{ rows: 1, showTooltip: true }}
                             style={{ display: 'block' }}
                           >
-                            {plan.subtitle}
+                            {p.group_subtitle}
                           </Text>
                         )}
                       </div>

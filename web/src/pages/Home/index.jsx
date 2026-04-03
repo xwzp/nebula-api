@@ -248,31 +248,36 @@ const HeroSection = ({ serverAddress, onCopy, copied, t }) => {
 };
 
 // ============ Subscription Pricing Section ============
-const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
+const SubscriptionSection = ({ t, groups = [], loading = false, navigate }) => {
   const [isYearly, setIsYearly] = useState(false);
 
-  if (!loading && plans.length === 0) return null;
+  if (!loading && groups.length === 0) return null;
 
   const { symbol, rate } = getCurrencyConfig();
 
-  // Separate plans into monthly and yearly, grouped by title
-  const monthlyPlans = plans
-    .filter((p) => p.duration_unit === 'month' && p.duration_value === 1)
-    .sort((a, b) => a.price_amount - b.price_amount);
-  const yearlyPlans = plans
-    .filter((p) => p.duration_unit === 'year' && p.duration_value === 1)
-    .sort((a, b) => a.price_amount - b.price_amount);
+  // For each group, find the monthly and yearly variants
+  const getVariant = (group, unit) =>
+    (group.plans || []).find((p) => p.duration_unit === unit && p.duration_value === 1);
 
-  const hasYearly = yearlyPlans.length > 0;
-  const yearlyByTitle = new Map(yearlyPlans.map((p) => [p.title, p]));
-  const monthlyByTitle = new Map(monthlyPlans.map((p) => [p.title, p]));
+  const hasYearly = groups.some((g) => getVariant(g, 'year'));
 
-  // Build display list: show only plans matching the selected billing period
-  const displayPlans = isYearly ? yearlyPlans : monthlyPlans;
+  // Calculate max yearly savings for the toggle badge
+  let maxSavings = 0;
+  if (hasYearly) {
+    for (const g of groups) {
+      const mp = getVariant(g, 'month');
+      const yp = getVariant(g, 'year');
+      if (mp && yp) {
+        const s = Math.round((1 - yp.price_amount / (mp.price_amount * 12)) * 100);
+        if (s > maxSavings) maxSavings = s;
+      }
+    }
+  }
+  const savingsText = maxSavings > 0 ? (maxSavings % 10 === 0 ? `${10 - maxSavings / 10}折` : `${100 - maxSavings}折`) : null;
 
-  // Adaptive grid based on plan count
+  // Adaptive grid based on group count
   const gridClass = (() => {
-    const count = displayPlans.length;
+    const count = groups.length;
     if (count <= 1) return 'grid-cols-1 max-w-md mx-auto';
     if (count === 2) return 'grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto';
     if (count === 3) return 'grid-cols-1 md:grid-cols-3 max-w-5xl mx-auto';
@@ -284,18 +289,15 @@ const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
     navigate(`/console/topup?tab=subscription&plan_id=${plan.id}`);
   };
 
-  // Calculate max yearly savings for the toggle badge
-  let maxSavings = 0;
-  if (hasYearly) {
-    for (const yp of yearlyPlans) {
-      const mp = monthlyByTitle.get(yp.title);
-      if (mp) {
-        const s = Math.round((1 - yp.price_amount / (mp.price_amount * 12)) * 100);
-        if (s > maxSavings) maxSavings = s;
-      }
+  // Parse features JSON string into array
+  const parseFeatures = (featuresStr) => {
+    if (!featuresStr) return [];
+    try {
+      return JSON.parse(featuresStr);
+    } catch {
+      return [];
     }
-  }
-  const savingsText = maxSavings > 0 ? (maxSavings % 10 === 0 ? `${10 - maxSavings / 10}折` : `${100 - maxSavings}折`) : null;
+  };
 
   return (
     <section id='pricing-sub' className='md:min-h-[calc(100vh-64px)] w-full flex items-center justify-center px-4 md:px-6 py-12'>
@@ -364,35 +366,55 @@ const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
             </div>
           ))
         ) : (
-          displayPlans.map((plan, idx) => {
-            const isPopular = idx === 0 && displayPlans.length > 1;
-            const price = Number(plan.price_amount || 0);
+          groups.map((group, idx) => {
+            const monthlyVariant = getVariant(group, 'month');
+            const yearlyVariant = getVariant(group, 'year');
+            // Pick the active variant based on toggle; fallback to the first available plan
+            const activePlan = isYearly
+              ? (yearlyVariant || monthlyVariant || (group.plans || [])[0])
+              : (monthlyVariant || yearlyVariant || (group.plans || [])[0]);
+
+            if (!activePlan) return null;
+
+            const isPopular = !!group.tag;
+            const price = Number(activePlan.price_amount || 0);
             const convertedPrice = price * rate;
             const displayPrice = convertedPrice.toFixed(Number.isInteger(convertedPrice) ? 0 : 2);
-            const duration = formatSubscriptionDuration(plan, t);
-            const totalAmount = Number(plan.total_amount || 0);
+            const duration = formatSubscriptionDuration(activePlan, t);
+            const totalAmount = Number(activePlan.total_amount || 0);
 
             // For yearly plans, calculate monthly equivalent price
-            const isYearlyPlan = plan.duration_unit === 'year' && plan.duration_value === 1;
+            const isYearlyPlan = activePlan.duration_unit === 'year' && activePlan.duration_value === 1;
             const monthlyEquiv = isYearlyPlan ? (convertedPrice / 12) : null;
             const monthlyEquivDisplay = monthlyEquiv ? monthlyEquiv.toFixed(Number.isInteger(monthlyEquiv) ? 0 : 2) : null;
 
-            // Check if this plan has a corresponding monthly plan (to show savings)
-            const correspondingMonthly = isYearlyPlan ? monthlyByTitle.get(plan.title) : null;
-            const savingsPercent = correspondingMonthly
-              ? Math.round((1 - price / (correspondingMonthly.price_amount * 12)) * 100)
+            // Calculate savings if both monthly and yearly exist
+            const savingsPercent = (isYearlyPlan && monthlyVariant)
+              ? Math.round((1 - price / (monthlyVariant.price_amount * 12)) * 100)
               : null;
 
-            const benefits = [
-              totalAmount > 0
-                ? { label: `${t('总额度')}: ${renderQuota(totalAmount)}` }
-                : { label: `${t('总额度')}: ${t('不限')}` },
-              plan.upgrade_group ? { label: `${t('升级分组')}: ${plan.upgrade_group}` } : null,
-            ].filter(Boolean);
+            // Build benefits from group features or fallback to plan data
+            const features = parseFeatures(group.features);
+            const benefits = features.length > 0
+              ? features
+              : [
+                  totalAmount > 0
+                    ? { text: `${t('总额度')}: ${renderQuota(totalAmount)}`, icon: 'check', style: 'default' }
+                    : { text: `${t('总额度')}: ${t('不限')}`, icon: 'check', style: 'default' },
+                  activePlan.upgrade_group
+                    ? { text: `${t('升级分组')}: ${activePlan.upgrade_group}`, icon: 'check', style: 'default' }
+                    : null,
+                ].filter(Boolean);
+
+            const getFeatureIcon = (item) => {
+              if (item.icon === 'x') return 'text-red-400 dark:text-red-500';
+              if (item.icon === 'info') return 'text-blue-400 dark:text-blue-500';
+              return isPopular ? 'text-purple-500' : 'text-slate-400 dark:text-zinc-500';
+            };
 
             return (
               <motion.div
-                key={plan.id}
+                key={group.id}
                 whileHover={{ y: -5 }}
                 className={cn(
                   'bg-white dark:bg-zinc-800 rounded-3xl p-6 md:p-8 border transition-all duration-300 flex flex-col relative overflow-hidden',
@@ -407,17 +429,22 @@ const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
 
                 <div className='flex items-center gap-2 mb-2'>
                   <h3 className='text-xl font-bold text-slate-900 dark:text-white'>
-                    {plan.title}
+                    {group.title}
                   </h3>
+                  {group.tag && (
+                    <span className='text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded-full'>
+                      {group.tag}
+                    </span>
+                  )}
                   {savingsPercent > 0 && (
                     <span className='text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full'>
                       {t('省')} {savingsPercent}%
                     </span>
                   )}
                 </div>
-                {plan.subtitle && (
+                {group.subtitle && (
                   <p className='text-sm text-slate-500 dark:text-zinc-400 min-h-[40px] mb-6'>
-                    {plan.subtitle}
+                    {group.subtitle}
                   </p>
                 )}
 
@@ -441,23 +468,25 @@ const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
                   {benefits.map((item, i) => (
                     <li
                       key={i}
-                      className='flex items-start gap-3 text-sm text-slate-700 dark:text-zinc-300'
+                      className={cn(
+                        'flex items-start gap-3 text-sm',
+                        item.style === 'disabled'
+                          ? 'text-slate-400 dark:text-zinc-600 line-through'
+                          : item.style === 'highlight'
+                            ? 'text-slate-900 dark:text-white font-medium'
+                            : 'text-slate-700 dark:text-zinc-300',
+                      )}
                     >
                       <Check
-                        className={cn(
-                          'w-5 h-5 shrink-0',
-                          isPopular
-                            ? 'text-purple-500'
-                            : 'text-slate-400 dark:text-zinc-500',
-                        )}
+                        className={cn('w-5 h-5 shrink-0', getFeatureIcon(item))}
                       />
-                      <span>{item.label}</span>
+                      <span>{item.text}</span>
                     </li>
                   ))}
                 </ul>
 
                 <button
-                  onClick={() => handleSubscribe(plan)}
+                  onClick={() => handleSubscribe(activePlan)}
                   className={cn(
                     'w-full py-3.5 rounded-xl font-medium transition-colors text-sm',
                     isPopular
@@ -465,7 +494,7 @@ const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
                       : 'bg-slate-100 dark:bg-zinc-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-zinc-600',
                   )}
                 >
-                  {t('订阅')} {plan.title}
+                  {t('订阅')} {group.title}
                 </button>
               </motion.div>
             );
@@ -478,41 +507,41 @@ const SubscriptionSection = ({ t, plans = [], loading = false, navigate }) => {
 };
 
 // ============ Pay-As-You-Go Section ============
-const PayAsYouGoSection = ({ t, statusState, navigate }) => {
-  const amountOptions = statusState?.status?.topup_amount_options || [];
-  const amountDiscount = statusState?.status?.topup_amount_discount || {};
-
-  // 构建卡片数据：从系统设置中读取充值选项和折扣
-  const plans = amountOptions.map((amount) => {
-    const discount = amountDiscount[amount] || null;
-    return { price: amount, amount, discount };
-  });
-
-  // 找出折扣最大的（discount 值最小）用于标记"最具性价比"
-  const bestDiscountAmount = plans.reduce((best, plan) => {
-    if (!plan.discount) return best;
-    if (!best || plan.discount < best.discount) return plan;
-    return best;
-  }, null);
-
+const PayAsYouGoSection = ({ t, topupTiers = [], navigate }) => {
   // 格式化折扣显示：0.96 → "96折", 0.85 → "85折"
   const formatDiscount = (discount) => {
     if (!discount || discount >= 1) return '';
     const zhe = Math.round(discount * 100);
-    // 如果是整十（如 90），显示为 "9折"；否则显示如 "96折"、"85折"
     if (zhe % 10 === 0) return `${zhe / 10}折`;
     return `${zhe}折`;
   };
 
   // grid 列数根据卡片数量自适应
   const gridCols =
-    plans.length <= 2
+    topupTiers.length <= 2
       ? 'grid-cols-1 sm:grid-cols-2'
-      : plans.length === 3
+      : topupTiers.length === 3
         ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
         : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
 
-  if (plans.length === 0) return null;
+  if (topupTiers.length === 0) return null;
+
+  // Parse features JSON string into array
+  const parseFeatures = (featuresStr) => {
+    if (!featuresStr) return [];
+    try {
+      return JSON.parse(featuresStr);
+    } catch {
+      return [];
+    }
+  };
+
+  // Find best discount tier
+  const bestDiscountTier = topupTiers.reduce((best, tier) => {
+    if (!tier.discount || tier.discount >= 1) return best;
+    if (!best || tier.discount < best.discount) return tier;
+    return best;
+  }, null);
 
   return (
     <section
@@ -530,16 +559,25 @@ const PayAsYouGoSection = ({ t, statusState, navigate }) => {
       </div>
 
       <div className={cn('grid gap-4 md:gap-6 px-2', gridCols)}>
-        {plans.map((plan, idx) => {
-          const actualPrice = plan.discount
-            ? plan.price * plan.discount
-            : plan.price;
-          const isBestDiscount =
-            bestDiscountAmount && plan.amount === bestDiscountAmount.amount;
-          const tag = isBestDiscount ? '最具性价比' : null;
+        {topupTiers.map((tier) => {
+          const amount = Number(tier.amount || 0);
+          const discount = tier.discount && tier.discount < 1 ? tier.discount : null;
+          const actualPrice = discount ? amount * discount : amount;
+          const isBestDiscount = bestDiscountTier && tier.id === bestDiscountTier.id;
+          const tag = tier.tag || (isBestDiscount ? '最具性价比' : null);
+          const features = parseFeatures(tier.features);
+
+          // Default benefits if no features configured
+          const defaultBenefits = [
+            { text: t('额度永久有效'), icon: 'check', style: 'default' },
+            { text: t('支持所有模型调用'), icon: 'check', style: 'default' },
+            { text: t('包含增值税发票'), icon: 'check', style: 'default' },
+          ];
+          const benefits = features.length > 0 ? features : defaultBenefits;
+
           return (
             <motion.div
-              key={idx}
+              key={tier.id}
               whileHover={{ y: -5 }}
               className={cn(
                 'relative bg-white dark:bg-zinc-800 rounded-3xl p-5 md:p-6 border transition-all duration-300 flex flex-col',
@@ -557,12 +595,22 @@ const PayAsYouGoSection = ({ t, statusState, navigate }) => {
               )}
 
               <div className='mb-8 mt-4 text-center'>
+                {tier.title && (
+                  <div className='text-lg font-bold text-slate-900 dark:text-white mb-1'>
+                    {tier.title}
+                  </div>
+                )}
+                {tier.subtitle && (
+                  <div className='text-xs text-slate-500 dark:text-zinc-400 mb-2'>
+                    {tier.subtitle}
+                  </div>
+                )}
                 <div className='text-slate-500 dark:text-zinc-400 font-medium mb-2'>
                   {t('充值额度')}
                 </div>
                 <div className='text-4xl font-extrabold flex items-center justify-center gap-1 text-slate-900 dark:text-white'>
                   <span className='text-2xl'>¥</span>
-                  {plan.amount}
+                  {amount}
                 </div>
               </div>
 
@@ -572,9 +620,9 @@ const PayAsYouGoSection = ({ t, statusState, navigate }) => {
                     <span className='text-sm text-slate-500 dark:text-zinc-400'>
                       {t('实际支付')}
                     </span>
-                    {plan.discount && (
+                    {discount && (
                       <span className='text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md'>
-                        {formatDiscount(plan.discount)}
+                        {formatDiscount(discount)}
                       </span>
                     )}
                   </div>
@@ -582,32 +630,36 @@ const PayAsYouGoSection = ({ t, statusState, navigate }) => {
                     <span className='text-2xl font-bold text-slate-900 dark:text-white'>
                       ¥{actualPrice.toFixed(0)}
                     </span>
-                    {plan.discount && (
+                    {discount && (
                       <span className='text-sm text-slate-400 line-through mb-1'>
-                        ¥{plan.price}
+                        ¥{amount}
                       </span>
                     )}
                   </div>
                 </div>
 
                 <ul className='space-y-3 mb-8'>
-                  <li className='flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300'>
-                    <Check className='w-4 h-4 text-purple-500' />{' '}
-                    {t('额度永久有效')}
-                  </li>
-                  <li className='flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300'>
-                    <Check className='w-4 h-4 text-purple-500' />{' '}
-                    {t('支持所有模型调用')}
-                  </li>
-                  <li className='flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-300'>
-                    <Check className='w-4 h-4 text-purple-500' />{' '}
-                    {t('包含增值税发票')}
-                  </li>
+                  {benefits.map((item, i) => (
+                    <li
+                      key={i}
+                      className={cn(
+                        'flex items-center gap-2 text-sm',
+                        item.style === 'disabled'
+                          ? 'text-slate-400 dark:text-zinc-600 line-through'
+                          : item.style === 'highlight'
+                            ? 'text-slate-900 dark:text-white font-medium'
+                            : 'text-slate-600 dark:text-zinc-300',
+                      )}
+                    >
+                      <Check className='w-4 h-4 text-purple-500' />{' '}
+                      {item.text}
+                    </li>
+                  ))}
                 </ul>
               </div>
 
               <button
-                onClick={() => navigate(`/console/topup?tab=topup&amount=${plan.amount}`)}
+                onClick={() => navigate(`/console/topup?tab=topup&amount=${amount}`)}
                 className={cn(
                   'w-full py-3 rounded-xl font-medium transition-colors text-sm',
                   tag
@@ -1029,19 +1081,22 @@ const Home = () => {
   const isMobile = useIsMobile();
   const snapContainerRef = useRef(null);
 
-  // Subscription plans (fetched from public API)
-  const [subscriptionPlans, setSubscriptionPlans] = useState([]);
-  const [subscriptionPlansLoading, setSubscriptionPlansLoading] = useState(true);
+  // Subscription plan groups (fetched from public API)
+  const [subscriptionGroups, setSubscriptionGroups] = useState([]);
+  const [subscriptionGroupsLoading, setSubscriptionGroupsLoading] = useState(true);
+
+  // Topup tiers (fetched from public API)
+  const [topupTiers, setTopupTiers] = useState([]);
+  const [topupTiersLoading, setTopupTiersLoading] = useState(true);
 
   // Dynamic TOC sections based on available data
-  const amountOptions = statusState?.status?.topup_amount_options || [];
   const sections = useMemo(() => {
     return ALL_SECTIONS.filter((s) => {
-      if (s.id === 'pricing-sub' && !subscriptionPlansLoading && subscriptionPlans.length === 0) return false;
-      if (s.id === 'pricing-payg' && amountOptions.length === 0) return false;
+      if (s.id === 'pricing-sub' && !subscriptionGroupsLoading && subscriptionGroups.length === 0) return false;
+      if (s.id === 'pricing-payg' && !topupTiersLoading && topupTiers.length === 0) return false;
       return true;
     });
-  }, [subscriptionPlans, subscriptionPlansLoading, amountOptions]);
+  }, [subscriptionGroups, subscriptionGroupsLoading, topupTiers, topupTiersLoading]);
 
   const serverAddress =
     statusState?.status?.server_address || `${window.location.origin}`;
@@ -1109,22 +1164,37 @@ const Home = () => {
     displayHomePageContent().then();
   }, []);
 
-  // ---- Fetch subscription plans ----
+  // ---- Fetch subscription plan groups ----
   useEffect(() => {
-    const fetchPlans = async () => {
+    const fetchGroups = async () => {
       try {
         const res = await API.get('/api/subscription/public-plans');
         const { success, data } = res.data;
         if (success && Array.isArray(data)) {
-          setSubscriptionPlans(data);
+          setSubscriptionGroups(data);
         }
       } catch (e) {
         // Silently fail — homepage must remain functional
       } finally {
-        setSubscriptionPlansLoading(false);
+        setSubscriptionGroupsLoading(false);
       }
     };
-    fetchPlans();
+    fetchGroups();
+
+    const fetchTiers = async () => {
+      try {
+        const res = await API.get('/api/topup/tiers');
+        const { success, data } = res.data;
+        if (success && Array.isArray(data)) {
+          setTopupTiers(data);
+        }
+      } catch (e) {
+        // Silently fail
+      } finally {
+        setTopupTiersLoading(false);
+      }
+    };
+    fetchTiers();
   }, []);
 
   // ---- TOC navigate: scroll snap container to target section ----
@@ -1187,8 +1257,8 @@ const Home = () => {
               copied={copied}
               t={t}
             />
-            <SubscriptionSection t={t} plans={subscriptionPlans} loading={subscriptionPlansLoading} navigate={navigate} />
-            <PayAsYouGoSection t={t} statusState={statusState} navigate={navigate} />
+            <SubscriptionSection t={t} groups={subscriptionGroups} loading={subscriptionGroupsLoading} navigate={navigate} />
+            <PayAsYouGoSection t={t} topupTiers={topupTiers} navigate={navigate} />
             <QuickConfigSection t={t} />
             <IndustrySection t={t} />
 
