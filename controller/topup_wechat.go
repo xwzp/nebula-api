@@ -75,9 +75,9 @@ func getWechatPayMoney(amount int64, group string) float64 {
 	}
 
 	discount := 1.0
-	if ds, ok := operation_setting.GetPaymentSetting().AmountDiscount[int(amount)]; ok {
-		if ds > 0 {
-			discount = ds
+	if tier, err := model.GetTopupTierByAmount(amount); err == nil && tier != nil {
+		if tier.Discount > 0 {
+			discount = tier.Discount
 		}
 	}
 

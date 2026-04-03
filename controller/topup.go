@@ -173,8 +173,6 @@ func GetTopUpInfo(c *gin.Context) {
 		"min_topup":           operation_setting.MinTopUp,
 		"stripe_min_topup":    setting.StripeMinTopUp,
 		"waffo_min_topup":     setting.WaffoMinTopUp,
-		"amount_options":      operation_setting.GetPaymentSetting().AmountOptions,
-		"discount":            operation_setting.GetPaymentSetting().AmountDiscount,
 		"topup_group_ratio":   topupGroupRatio,
 	}
 	common.ApiSuccess(c, data)
@@ -224,11 +222,11 @@ func getPayMoney(amount int64, group string) float64 {
 		unitPrice = operation_setting.Price
 	}
 	dPrice := decimal.NewFromFloat(unitPrice)
-	// apply optional preset discount by the original request amount (if configured), default 1.0
+	// apply optional tier discount by the original request amount, default 1.0
 	discount := 1.0
-	if ds, ok := operation_setting.GetPaymentSetting().AmountDiscount[int(amount)]; ok {
-		if ds > 0 {
-			discount = ds
+	if tier, err := model.GetTopupTierByAmount(amount); err == nil && tier != nil {
+		if tier.Discount > 0 {
+			discount = tier.Discount
 		}
 	}
 	dDiscount := decimal.NewFromFloat(discount)

@@ -66,6 +66,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       redemption: true,
       user: true,
       subscription: true,
+      'topup-tiers': true,
       setting: true,
     },
   });
@@ -127,6 +128,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         redemption: true,
         user: true,
         subscription: true,
+        'topup-tiers': true,
         setting: true,
       },
     };
@@ -196,6 +198,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             redemption: true,
             user: true,
             subscription: true,
+            'topup-tiers': true,
             setting: true,
           },
         };
@@ -264,6 +267,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'subscription',
           title: t('订阅管理'),
           description: t('订阅套餐管理'),
+        },
+        {
+          key: 'topup-tiers',
+          title: t('充值档位'),
+          description: t('按量充值金额选项配置'),
         },
         {
           key: 'redemption',

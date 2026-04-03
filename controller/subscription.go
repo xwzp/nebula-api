@@ -17,7 +17,10 @@ import (
 // ---- Shared types ----
 
 type SubscriptionPlanDTO struct {
-	Plan model.SubscriptionPlan `json:"plan"`
+	Plan          model.SubscriptionPlan `json:"plan"`
+	GroupTitle    string                 `json:"group_title,omitempty"`
+	GroupSubtitle string                 `json:"group_subtitle,omitempty"`
+	GroupTag      string                 `json:"group_tag,omitempty"`
 }
 
 type BillingPreferenceRequest struct {
@@ -86,11 +89,8 @@ func validateAndCreateSubscriptionOrder(c *gin.Context, tradePrefix string, paym
 
 // ---- Public APIs ----
 
-// PublicSubscriptionPlanDTO strips sensitive payment gateway fields
-type PublicSubscriptionPlanDTO struct {
+type PublicPlanVariantDTO struct {
 	Id                      int     `json:"id"`
-	Title                   string  `json:"title"`
-	Subtitle                string  `json:"subtitle"`
 	PriceAmount             float64 `json:"price_amount"`
 	Currency                string  `json:"currency"`
 	DurationUnit            string  `json:"duration_unit"`
@@ -104,31 +104,59 @@ type PublicSubscriptionPlanDTO struct {
 	MaxPurchasePerUser      int     `json:"max_purchase_per_user"`
 }
 
+type PublicPlanGroupDTO struct {
+	Id       int                    `json:"id"`
+	Title    string                 `json:"title"`
+	Subtitle string                 `json:"subtitle"`
+	Tag      string                 `json:"tag"`
+	Features string                 `json:"features"`
+	Plans    []PublicPlanVariantDTO  `json:"plans"`
+}
+
 func GetPublicSubscriptionPlans(c *gin.Context) {
-	var plans []model.SubscriptionPlan
-	if err := model.DB.Where("enabled = ?", true).Order("sort_order desc, id desc").Find(&plans).Error; err != nil {
+	groups, err := model.GetEnabledSubscriptionPlanGroups()
+	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	result := make([]PublicSubscriptionPlanDTO, 0, len(plans))
-	for _, p := range plans {
-		result = append(result, PublicSubscriptionPlanDTO{
-			Id:                      p.Id,
-			Title:                   p.Title,
-			Subtitle:                p.Subtitle,
-			PriceAmount:             p.PriceAmount,
-			Currency:                p.Currency,
-			DurationUnit:            p.DurationUnit,
-			DurationValue:           p.DurationValue,
-			CustomSeconds:           p.CustomSeconds,
-			SortOrder:               p.SortOrder,
-			TotalAmount:             p.TotalAmount,
-			UpgradeGroup:            p.UpgradeGroup,
-			QuotaResetPeriod:        p.QuotaResetPeriod,
-			QuotaResetCustomSeconds: p.QuotaResetCustomSeconds,
-			MaxPurchasePerUser:      p.MaxPurchasePerUser,
+
+	result := make([]PublicPlanGroupDTO, 0, len(groups))
+	for _, g := range groups {
+		plans, err := model.GetEnabledSubscriptionPlansByGroupID(g.Id)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if len(plans) == 0 {
+			continue
+		}
+		variants := make([]PublicPlanVariantDTO, 0, len(plans))
+		for _, p := range plans {
+			variants = append(variants, PublicPlanVariantDTO{
+				Id:                      p.Id,
+				PriceAmount:             p.PriceAmount,
+				Currency:                p.Currency,
+				DurationUnit:            p.DurationUnit,
+				DurationValue:           p.DurationValue,
+				CustomSeconds:           p.CustomSeconds,
+				SortOrder:               p.SortOrder,
+				TotalAmount:             p.TotalAmount,
+				UpgradeGroup:            p.UpgradeGroup,
+				QuotaResetPeriod:        p.QuotaResetPeriod,
+				QuotaResetCustomSeconds: p.QuotaResetCustomSeconds,
+				MaxPurchasePerUser:      p.MaxPurchasePerUser,
+			})
+		}
+		result = append(result, PublicPlanGroupDTO{
+			Id:       g.Id,
+			Title:    g.Title,
+			Subtitle: g.Subtitle,
+			Tag:      g.Tag,
+			Features: g.Features,
+			Plans:    variants,
 		})
 	}
+
 	c.Header("Cache-Control", "public, max-age=60")
 	common.ApiSuccess(c, result)
 }
@@ -141,11 +169,24 @@ func GetSubscriptionPlans(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Pre-load group titles for enrichment
+	groupCache := make(map[int]*model.SubscriptionPlanGroup)
 	result := make([]SubscriptionPlanDTO, 0, len(plans))
 	for _, p := range plans {
-		result = append(result, SubscriptionPlanDTO{
-			Plan: p,
-		})
+		dto := SubscriptionPlanDTO{Plan: p}
+		if p.GroupID > 0 {
+			g, ok := groupCache[p.GroupID]
+			if !ok {
+				g, _ = model.GetSubscriptionPlanGroupById(p.GroupID)
+				groupCache[p.GroupID] = g // may be nil
+			}
+			if g != nil {
+				dto.GroupTitle = g.Title
+				dto.GroupSubtitle = g.Subtitle
+				dto.GroupTag = g.Tag
+			}
+		}
+		result = append(result, dto)
 	}
 	common.ApiSuccess(c, result)
 }
@@ -226,8 +267,17 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 		return
 	}
 	req.Plan.Id = 0
-	if strings.TrimSpace(req.Plan.Title) == "" {
-		common.ApiErrorMsg(c, "套餐标题不能为空")
+	// Accept group_id from URL path parameter or request body
+	if groupIdFromPath, err := strconv.Atoi(c.Param("id")); err == nil && groupIdFromPath > 0 {
+		req.Plan.GroupID = groupIdFromPath
+	}
+	if req.Plan.GroupID <= 0 {
+		common.ApiErrorMsg(c, "套餐组ID不能为空")
+		return
+	}
+	// Verify group exists
+	if _, err := model.GetSubscriptionPlanGroupById(req.Plan.GroupID); err != nil {
+		common.ApiErrorMsg(c, "套餐组不存在")
 		return
 	}
 	if req.Plan.PriceAmount < 0 {
@@ -288,10 +338,6 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorMsg(c, "参数错误")
 		return
 	}
-	if strings.TrimSpace(req.Plan.Title) == "" {
-		common.ApiErrorMsg(c, "套餐标题不能为空")
-		return
-	}
 	if req.Plan.PriceAmount < 0 {
 		common.ApiErrorMsg(c, "价格不能为负数")
 		return
@@ -335,8 +381,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
 		// update plan (allow zero values updates with map)
 		updateMap := map[string]interface{}{
-			"title":                      req.Plan.Title,
-			"subtitle":                   req.Plan.Subtitle,
+			"group_id":                   req.Plan.GroupID,
 			"price_amount":               req.Plan.PriceAmount,
 			"currency":                   req.Plan.Currency,
 			"duration_unit":              req.Plan.DurationUnit,
@@ -489,6 +534,113 @@ func AdminDeleteUserSubscription(c *gin.Context) {
 	}
 	if msg != "" {
 		common.ApiSuccess(c, gin.H{"message": msg})
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+// ---- Plan Group Admin APIs ----
+
+type GroupWithPlans struct {
+	model.SubscriptionPlanGroup
+	Plans []model.SubscriptionPlan `json:"plans"`
+}
+
+func AdminListSubscriptionPlanGroups(c *gin.Context) {
+	groups, err := model.GetAllSubscriptionPlanGroups()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	result := make([]GroupWithPlans, 0, len(groups))
+	for _, g := range groups {
+		plans, err := model.GetSubscriptionPlansByGroupID(g.Id)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		result = append(result, GroupWithPlans{
+			SubscriptionPlanGroup: g,
+			Plans:                 plans,
+		})
+	}
+	common.ApiSuccess(c, result)
+}
+
+func AdminCreateSubscriptionPlanGroup(c *gin.Context) {
+	var group model.SubscriptionPlanGroup
+	if err := common.DecodeJson(c.Request.Body, &group); err != nil {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if strings.TrimSpace(group.Title) == "" {
+		common.ApiErrorMsg(c, "套餐组标题不能为空")
+		return
+	}
+	if err := model.CreateSubscriptionPlanGroup(&group); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, group)
+}
+
+func AdminUpdateSubscriptionPlanGroup(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	if id <= 0 {
+		common.ApiErrorMsg(c, "无效的ID")
+		return
+	}
+	var req map[string]interface{}
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	updates := make(map[string]interface{})
+	allowedFields := []string{"title", "subtitle", "tag", "features", "sort_order", "enabled"}
+	for _, f := range allowedFields {
+		if v, ok := req[f]; ok {
+			updates[f] = v
+		}
+	}
+	if len(updates) == 0 {
+		common.ApiErrorMsg(c, "没有需要更新的字段")
+		return
+	}
+	if err := model.UpdateSubscriptionPlanGroup(id, updates); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func AdminDeleteSubscriptionPlanGroup(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	if id <= 0 {
+		common.ApiErrorMsg(c, "无效的ID")
+		return
+	}
+	if err := model.DeleteSubscriptionPlanGroup(id); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func AdminUpdateSubscriptionPlanGroupStatus(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	if id <= 0 {
+		common.ApiErrorMsg(c, "无效的ID")
+		return
+	}
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if err := model.UpdateSubscriptionPlanGroup(id, map[string]interface{}{"enabled": req.Enabled}); err != nil {
+		common.ApiError(c, err)
 		return
 	}
 	common.ApiSuccess(c, nil)

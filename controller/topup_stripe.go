@@ -325,11 +325,11 @@ func getStripePayMoney(amount float64, group string) float64 {
 	if topupGroupRatio == 0 {
 		topupGroupRatio = 1
 	}
-	// apply optional preset discount by the original request amount (if configured), default 1.0
+	// apply optional tier discount by the original request amount, default 1.0
 	discount := 1.0
-	if ds, ok := operation_setting.GetPaymentSetting().AmountDiscount[int(originalAmount)]; ok {
-		if ds > 0 {
-			discount = ds
+	if tier, err := model.GetTopupTierByAmount(int64(originalAmount)); err == nil && tier != nil {
+		if tier.Discount > 0 {
+			discount = tier.Discount
 		}
 	}
 	payMoney := amount * setting.StripeUnitPrice * topupGroupRatio * discount

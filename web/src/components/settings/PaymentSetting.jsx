@@ -42,8 +42,6 @@ const PaymentSetting = () => {
     TopupGroupRatio: '',
     CustomCallbackAddress: '',
     PayMethods: '',
-    AmountOptions: '',
-    AmountDiscount: '',
 
     StripeApiSecret: '',
     StripeWebhookSecret: '',
@@ -71,28 +69,6 @@ const PaymentSetting = () => {
               );
             } catch (error) {
               newInputs[item.key] = item.value;
-            }
-            break;
-          case 'payment_setting.amount_options':
-            try {
-              newInputs['AmountOptions'] = JSON.stringify(
-                JSON.parse(item.value),
-                null,
-                2,
-              );
-            } catch (error) {
-              newInputs['AmountOptions'] = item.value;
-            }
-            break;
-          case 'payment_setting.amount_discount':
-            try {
-              newInputs['AmountDiscount'] = JSON.stringify(
-                JSON.parse(item.value),
-                null,
-                2,
-              );
-            } catch (error) {
-              newInputs['AmountDiscount'] = item.value;
             }
             break;
           case 'Price':

@@ -55,7 +55,9 @@
     "i18n:extract": "bunx i18next-cli extract",
     "i18n:status": "bunx i18next-cli status",
     "i18n:sync": "bunx i18next-cli sync",
-    "i18n:lint": "bunx i18next-cli lint"
+    "i18n:lint": "bunx i18next-cli lint",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed"
   },
   "eslintConfig": {
     "extends": [
@@ -77,6 +79,7 @@
   },
   "devDependencies": {
     "@douyinfe/vite-plugin-semi": "^2.74.0-alpha.6",
+    "@playwright/test": "^1.59.1",
     "@so1ve/prettier-config": "^3.1.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.21",

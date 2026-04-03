@@ -109,7 +109,7 @@ const SubscriptionPurchaseModal = ({
                   className='text-slate-900 dark:text-slate-100'
                   style={{ maxWidth: 200 }}
                 >
-                  {plan.title}
+                  {plan.group_title}
                 </Typography.Text>
               </div>
               <div className='flex justify-between items-center'>

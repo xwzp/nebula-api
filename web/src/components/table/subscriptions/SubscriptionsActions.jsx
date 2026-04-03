@@ -20,16 +20,16 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Button } from '@douyinfe/semi-ui';
 
-const SubscriptionsActions = ({ openCreate, t }) => {
+const SubscriptionsActions = ({ openCreateGroup, t }) => {
   return (
     <div className='flex gap-2 w-full md:w-auto'>
       <Button
         type='primary'
         className='w-full md:w-auto'
-        onClick={openCreate}
+        onClick={openCreateGroup}
         size='small'
       >
-        {t('新建套餐')}
+        {t('新建套餐组')}
       </Button>
     </div>
   );

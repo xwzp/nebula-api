@@ -36,3 +36,5 @@ data/
 .gopath
 /nebula-api
 .worktrees/
+web/test-results/
+web/playwright-report/
