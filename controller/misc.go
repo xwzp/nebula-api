@@ -46,6 +46,7 @@ func GetStatus(c *gin.Context) {
 
 	passkeySetting := system_setting.GetPasskeySettings()
 	legalSetting := system_setting.GetLegalSettings()
+	paymentSetting := operation_setting.GetPaymentSetting()
 
 	data := gin.H{
 		"version":                     common.Version,
@@ -116,6 +117,8 @@ func GetStatus(c *gin.Context) {
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
+		"topup_amount_options":        paymentSetting.AmountOptions,
+		"topup_amount_discount":       paymentSetting.AmountDiscount,
 		"_qn":                         "new-api",
 	}
 

@@ -2,7 +2,6 @@ package router
 
 import (
 	"embed"
-	"io/fs"
 	"net/http"
 	"strings"
 
@@ -14,21 +13,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetWebRouter(router *gin.Engine, buildFS embed.FS, indexPage []byte, docsFS embed.FS) {
+func SetWebRouter(router *gin.Engine, buildFS embed.FS, indexPage []byte) {
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
 	router.Use(static.Serve("/", common.EmbedFolder(buildFS, "web/dist")))
-
-	// Serve Fumadocs site at /docs/
-	docsSubFS, _ := fs.Sub(docsFS, "docs/out")
-	docsFileServer := http.StripPrefix("/docs/", http.FileServer(http.FS(docsSubFS)))
-	router.GET("/docs", func(c *gin.Context) {
-		c.Redirect(http.StatusMovedPermanently, "/docs/")
-	})
-	router.GET("/docs/*filepath", func(c *gin.Context) {
-		docsFileServer.ServeHTTP(c.Writer, c.Request)
-	})
 
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")

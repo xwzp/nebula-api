@@ -1,13 +1,16 @@
 package controller
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
+	"github.com/thanhpk/randstr"
 	"gorm.io/gorm"
 )
 
@@ -19,6 +22,115 @@ type SubscriptionPlanDTO struct {
 
 type BillingPreferenceRequest struct {
 	BillingPreference string `json:"billing_preference"`
+}
+
+type SubscriptionPayRequest struct {
+	PlanId int `json:"plan_id"`
+}
+
+// validateAndCreateSubscriptionOrder validates the plan, checks purchase limits,
+// and creates a pending SubscriptionOrder. Returns the plan, order, and true on success.
+// On failure it writes the error response and returns false.
+func validateAndCreateSubscriptionOrder(c *gin.Context, tradePrefix string, paymentMethod string) (*model.SubscriptionPlan, *model.SubscriptionOrder, bool) {
+	var req SubscriptionPayRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.PlanId <= 0 {
+		common.ApiErrorMsg(c, "参数错误")
+		return nil, nil, false
+	}
+
+	plan, err := model.GetSubscriptionPlanById(req.PlanId)
+	if err != nil {
+		common.ApiError(c, err)
+		return nil, nil, false
+	}
+	if !plan.Enabled {
+		common.ApiErrorMsg(c, "套餐未启用")
+		return nil, nil, false
+	}
+	if plan.PriceAmount < 0.01 {
+		common.ApiErrorMsg(c, "套餐金额过低")
+		return nil, nil, false
+	}
+
+	userId := c.GetInt("id")
+	if plan.MaxPurchasePerUser > 0 {
+		count, err := model.CountUserSubscriptionsByPlan(userId, plan.Id)
+		if err != nil {
+			common.ApiError(c, err)
+			return nil, nil, false
+		}
+		if count >= int64(plan.MaxPurchasePerUser) {
+			common.ApiErrorMsg(c, "已达到该套餐购买上限")
+			return nil, nil, false
+		}
+	}
+
+	tradeNo := fmt.Sprintf("%s-%d-%d-%s", tradePrefix, userId, time.Now().UnixMilli(), randstr.String(6))
+
+	order := &model.SubscriptionOrder{
+		UserId:        userId,
+		PlanId:        plan.Id,
+		Money:         plan.PriceAmount,
+		TradeNo:       tradeNo,
+		PaymentMethod: paymentMethod,
+		CreateTime:    time.Now().Unix(),
+		Status:        common.TopUpStatusPending,
+	}
+	if err := order.Insert(); err != nil {
+		common.ApiErrorMsg(c, "创建订单失败")
+		return nil, nil, false
+	}
+
+	return plan, order, true
+}
+
+// ---- Public APIs ----
+
+// PublicSubscriptionPlanDTO strips sensitive payment gateway fields
+type PublicSubscriptionPlanDTO struct {
+	Id                      int     `json:"id"`
+	Title                   string  `json:"title"`
+	Subtitle                string  `json:"subtitle"`
+	PriceAmount             float64 `json:"price_amount"`
+	Currency                string  `json:"currency"`
+	DurationUnit            string  `json:"duration_unit"`
+	DurationValue           int     `json:"duration_value"`
+	CustomSeconds           int64   `json:"custom_seconds"`
+	SortOrder               int     `json:"sort_order"`
+	TotalAmount             int64   `json:"total_amount"`
+	UpgradeGroup            string  `json:"upgrade_group"`
+	QuotaResetPeriod        string  `json:"quota_reset_period"`
+	QuotaResetCustomSeconds int64   `json:"quota_reset_custom_seconds"`
+	MaxPurchasePerUser      int     `json:"max_purchase_per_user"`
+}
+
+func GetPublicSubscriptionPlans(c *gin.Context) {
+	var plans []model.SubscriptionPlan
+	if err := model.DB.Where("enabled = ?", true).Order("sort_order desc, id desc").Find(&plans).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	result := make([]PublicSubscriptionPlanDTO, 0, len(plans))
+	for _, p := range plans {
+		result = append(result, PublicSubscriptionPlanDTO{
+			Id:                      p.Id,
+			Title:                   p.Title,
+			Subtitle:                p.Subtitle,
+			PriceAmount:             p.PriceAmount,
+			Currency:                p.Currency,
+			DurationUnit:            p.DurationUnit,
+			DurationValue:           p.DurationValue,
+			CustomSeconds:           p.CustomSeconds,
+			SortOrder:               p.SortOrder,
+			TotalAmount:             p.TotalAmount,
+			UpgradeGroup:            p.UpgradeGroup,
+			QuotaResetPeriod:        p.QuotaResetPeriod,
+			QuotaResetCustomSeconds: p.QuotaResetCustomSeconds,
+			MaxPurchasePerUser:      p.MaxPurchasePerUser,
+		})
+	}
+	c.Header("Cache-Control", "public, max-age=60")
+	common.ApiSuccess(c, result)
 }
 
 // ---- User APIs ----
