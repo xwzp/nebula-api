@@ -29,7 +29,10 @@ import {
 } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
-import { fetchTokenKey as fetchTokenKeyById } from '../../helpers/token';
+import {
+  fetchTokenKey as fetchTokenKeyById,
+  getServerAddress,
+} from '../../helpers/token';
 
 export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
   const { t } = useTranslation();
@@ -198,6 +201,76 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     await copyText(`sk-${fullKey}`);
   };
 
+  // Generate OpenClaw provider config and copy shell command to clipboard
+  // shell: 'bash' | 'fish'
+  const onConfigureProvider = async (record, provider, shell = 'bash') => {
+    if (provider !== 'openclaw') return;
+    try {
+      const [fullKey, res] = await Promise.all([
+        fetchTokenKey(record),
+        API.get(`/api/token/${record.id}/openclaw-models`),
+      ]);
+      const { success, message, data } = res.data;
+      if (!success) {
+        showError(message || t('获取模型列表失败'));
+        return;
+      }
+      const serverAddress = getServerAddress();
+      const providerKey =
+        'nebula-' + (record.name || 'default').replace(/\s+/g, '-').toLowerCase();
+      const providerConfig = {};
+      providerConfig[providerKey] = {
+        baseUrl: serverAddress + '/v1',
+        apiKey: `sk-${fullKey}`,
+        api: 'openai-completions',
+        models: data || [],
+      };
+      const providerJson = JSON.stringify(providerConfig, null, 2);
+
+      const pythonScript = `import json, os, sys
+
+provider = json.loads(sys.stdin.read())
+path = os.path.expanduser("~/.openclaw/openclaw.json")
+try:
+    with open(path) as f:
+        existing = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    existing = {}
+
+existing.setdefault("models", {}).setdefault("providers", {}).update(provider)
+
+pk = list(provider.keys())[0]
+models = provider[pk].get("models", [])
+dm = existing.setdefault("agents", {}).setdefault("defaults", {}).setdefault("models", {})
+prefix = pk + "/"
+for k in list(dm.keys()):
+    if k.startswith(prefix):
+        del dm[k]
+for m in models:
+    dm[prefix + m["id"]] = {}
+
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w") as f:
+    json.dump(existing, f, indent=2, ensure_ascii=False)
+
+print("Done! Nebula provider configured at " + path)`;
+
+      let command;
+      if (shell === 'fish') {
+        // fish: no heredoc; single quotes on both echo and python3 -c to avoid shell interpretation
+        command = `echo '${providerJson}' | python3 -c '${pythonScript}'`;
+      } else {
+        // bash/zsh: use heredoc to pipe JSON via stdin
+        command = `python3 -c '${pythonScript}' << 'OPENCLAW_JSON'\n${providerJson}\nOPENCLAW_JSON`;
+      }
+
+      await copyText(command);
+      showSuccess(t('OpenClaw 配置命令已复制到剪贴板'));
+    } catch (error) {
+      showError(error?.message || t('生成配置失败'));
+    }
+  };
+
   // Open link function for chat integrations
   const onOpenLink = async (type, url, record) => {
     const fullKey = await fetchTokenKey(record);
@@ -209,15 +282,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       openFluentNotification(fullKey);
       return;
     }
-    let status = localStorage.getItem('status');
-    let serverAddress = '';
-    if (status) {
-      status = JSON.parse(status);
-      serverAddress = status.server_address;
-    }
-    if (serverAddress === '') {
-      serverAddress = window.location.origin;
-    }
+    const serverAddress = getServerAddress();
     if (url.includes('{cherryConfig}') === true) {
       let cherryConfig = {
         id: 'new-api',
@@ -465,6 +530,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     fetchTokenKey,
     toggleTokenVisibility,
     copyTokenKey,
+    onConfigureProvider,
     onOpenLink,
     manageToken,
     searchTokens,

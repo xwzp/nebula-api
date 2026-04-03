@@ -298,6 +298,7 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.PUT("/", controller.UpdateToken)
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
+			tokenRoute.GET("/:id/openclaw-models", controller.GetTokenOpenClawModels)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

@@ -327,4 +327,11 @@ func enrichModels(models []*model.Model) {
 		mm.MatchedModels = names
 		mm.MatchedCount = len(names)
 	}
+
+	// Resolve capability metadata (3-tier: DB override > fallback > default)
+	for _, m := range models {
+		if m != nil {
+			model.ResolveCapabilities(m)
+		}
+	}
 }

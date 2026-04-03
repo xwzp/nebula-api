@@ -33,7 +33,7 @@ import {
   Col,
   Row,
 } from '@douyinfe/semi-ui';
-import { Save, X, FileText } from 'lucide-react';
+import { Save, X, FileText, Cpu } from 'lucide-react';
 import { IconAlertTriangle, IconLink } from '@douyinfe/semi-icons';
 import { API, showError, showSuccess } from '../../../../helpers';
 import { useTranslation } from 'react-i18next';
@@ -52,6 +52,44 @@ const ENDPOINT_TEMPLATE = {
   'image-generation': { path: '/v1/images/generations', method: 'POST' },
 };
 
+const reasoningOptions = [
+  { label: '未设置（使用回退值）', value: 0 },
+  { label: '支持', value: 1 },
+  { label: '不支持', value: 2 },
+];
+
+const modalityOptions = [
+  { label: 'Text', value: 'text' },
+  { label: 'Image', value: 'image' },
+  { label: 'Audio', value: 'audio' },
+  { label: 'Video', value: 'video' },
+];
+
+const SOURCE_TAG_MAP = {
+  override: { color: 'blue', label: '自定义' },
+  fallback: { color: 'orange', label: '已知模型' },
+  default: { color: 'grey', label: '默认值' },
+};
+
+const CapabilityHint = ({ value, source, formatter }) => {
+  if (!source) return null;
+  const tag = SOURCE_TAG_MAP[source] || SOURCE_TAG_MAP.default;
+  const display = formatter ? formatter(value) : value;
+  return (
+    <span>
+      当前生效: {display}{' '}
+      <Tag size='small' color={tag.color} shape='circle' style={{ marginLeft: 4 }}>
+        {tag.label}
+      </Tag>
+    </span>
+  );
+};
+
+const formatNumber = (n) => (n != null ? n.toLocaleString() : '-');
+const formatReasoning = (v) => (v === 1 ? '支持' : '不支持');
+const formatModalities = (arr) =>
+  Array.isArray(arr) && arr.length > 0 ? arr.join(', ') : '-';
+
 const nameRuleOptions = [
   { label: '精确名称匹配', value: 0 },
   { label: '前缀名称匹配', value: 1 },
@@ -66,6 +104,9 @@ const EditModelModal = (props) => {
   const formApiRef = useRef(null);
   const isEdit = props.editingModel && props.editingModel.id !== undefined;
   const placement = useMemo(() => (isEdit ? 'right' : 'left'), [isEdit]);
+
+  // 模型能力参考信息（effective/fallback/source，从 API 加载）
+  const [capabilityInfo, setCapabilityInfo] = useState({});
 
   // 供应商列表
   const [vendors, setVendors] = useState([]);
@@ -124,6 +165,10 @@ const EditModelModal = (props) => {
     name_rule: props.editingModel?.model_name ? 0 : undefined, // 通过未配置模型过来的固定为精确匹配
     status: true,
     sync_official: true,
+    context_window: 0,
+    max_output_tokens: 0,
+    reasoning: 0,
+    input_modalities: [],
   });
 
   const handleCancel = () => {
@@ -151,6 +196,26 @@ const EditModelModal = (props) => {
         // 处理status/sync_official，将数字转为布尔值
         data.status = data.status === 1;
         data.sync_official = (data.sync_official ?? 1) === 1;
+        // 处理 input_modalities: JSON string → array
+        if (data.input_modalities && typeof data.input_modalities === 'string') {
+          try {
+            data.input_modalities = JSON.parse(data.input_modalities);
+          } catch {
+            data.input_modalities = [];
+          }
+        } else {
+          data.input_modalities = data.input_modalities || [];
+        }
+        // 提取能力参考信息（effective/fallback/source，read-only display）
+        const capKeys = [
+          'effective_context_window', 'effective_max_output_tokens',
+          'effective_reasoning', 'effective_input_modalities',
+          'context_window_source', 'max_output_tokens_source',
+          'reasoning_source', 'input_modalities_source',
+          'fallback_context_window', 'fallback_max_output_tokens',
+          'fallback_reasoning', 'fallback_input_modalities',
+        ];
+        setCapabilityInfo(Object.fromEntries(capKeys.map((k) => [k, data[k]])));
         if (formApiRef.current) {
           formApiRef.current.setValues({ ...getInitValues(), ...data });
         }
@@ -186,6 +251,7 @@ const EditModelModal = (props) => {
       }
     } else {
       formApiRef.current?.reset();
+      setCapabilityInfo({});
     }
   }, [props.visiable, props.editingModel?.id, props.editingModel?.model_name]);
 
@@ -198,6 +264,13 @@ const EditModelModal = (props) => {
         endpoints: values.endpoints || '',
         status: values.status ? 1 : 0,
         sync_official: values.sync_official ? 1 : 0,
+        context_window: values.context_window || 0,
+        max_output_tokens: values.max_output_tokens || 0,
+        reasoning: values.reasoning || 0,
+        input_modalities:
+          Array.isArray(values.input_modalities) && values.input_modalities.length > 0
+            ? JSON.stringify(values.input_modalities)
+            : '',
       };
 
       if (isEdit) {
@@ -539,6 +612,118 @@ const EditModelModal = (props) => {
                       field='status'
                       label={t('状态')}
                       size='large'
+                    />
+                  </Col>
+                </Row>
+              </Card>
+
+              {/* 模型能力 */}
+              <Card className='!rounded-2xl shadow-sm border-0 mt-2'>
+                <div className='flex items-center mb-2'>
+                  <Avatar size='small' color='cyan' className='mr-2 shadow-md'>
+                    <Cpu size={16} />
+                  </Avatar>
+                  <div>
+                    <Text className='text-lg font-medium'>{t('模型能力')}</Text>
+                    <div className='text-xs text-gray-600'>
+                      {t('配置模型的上下文窗口、输出限制等能力参数')}
+                    </div>
+                  </div>
+                </div>
+                <Banner
+                  type='info'
+                  closeIcon={null}
+                  description={t(
+                    '留空或设为 0 时将自动使用回退值（已知模型表或全局默认值）。下方显示当前生效值及其来源。',
+                  )}
+                  style={{ marginBottom: 12 }}
+                />
+                <Row gutter={12}>
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='context_window'
+                      label={t('上下文窗口')}
+                      placeholder={
+                        capabilityInfo.fallback_context_window
+                          ? formatNumber(capabilityInfo.fallback_context_window)
+                          : formatNumber(128000)
+                      }
+                      min={0}
+                      style={{ width: '100%' }}
+                      extraText={
+                        isEdit && (
+                          <CapabilityHint
+                            value={capabilityInfo.effective_context_window}
+                            source={capabilityInfo.context_window_source}
+                            formatter={formatNumber}
+                          />
+                        )
+                      }
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='max_output_tokens'
+                      label={t('最大输出 Tokens')}
+                      placeholder={
+                        capabilityInfo.fallback_max_output_tokens
+                          ? formatNumber(capabilityInfo.fallback_max_output_tokens)
+                          : formatNumber(4096)
+                      }
+                      min={0}
+                      style={{ width: '100%' }}
+                      extraText={
+                        isEdit && (
+                          <CapabilityHint
+                            value={capabilityInfo.effective_max_output_tokens}
+                            source={capabilityInfo.max_output_tokens_source}
+                            formatter={formatNumber}
+                          />
+                        )
+                      }
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Form.Select
+                      field='reasoning'
+                      label={t('推理能力')}
+                      optionList={reasoningOptions.map((o) => ({
+                        label: t(o.label),
+                        value: o.value,
+                      }))}
+                      style={{ width: '100%' }}
+                      extraText={
+                        isEdit && (
+                          <CapabilityHint
+                            value={capabilityInfo.effective_reasoning}
+                            source={capabilityInfo.reasoning_source}
+                            formatter={formatReasoning}
+                          />
+                        )
+                      }
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Form.Select
+                      field='input_modalities'
+                      label={t('输入模态')}
+                      multiple
+                      optionList={modalityOptions}
+                      placeholder={
+                        capabilityInfo.fallback_input_modalities?.length
+                          ? capabilityInfo.fallback_input_modalities.join(', ')
+                          : 'text'
+                      }
+                      style={{ width: '100%' }}
+                      extraText={
+                        isEdit && (
+                          <CapabilityHint
+                            value={capabilityInfo.effective_input_modalities}
+                            source={capabilityInfo.input_modalities_source}
+                            formatter={formatModalities}
+                          />
+                        )
+                      }
                     />
                   </Col>
                 </Row>

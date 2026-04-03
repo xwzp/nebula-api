@@ -324,6 +324,7 @@ const renderOperations = (
   text,
   record,
   onOpenLink,
+  onConfigureProvider,
   setEditingToken,
   setShowEdit,
   manageToken,
@@ -351,6 +352,21 @@ const renderOperations = (
   } catch (_) {
     showError(t('聊天链接配置错误，请联系管理员'));
   }
+
+  const configProviders = [
+    {
+      node: 'item',
+      key: 'openclaw-bash',
+      name: 'OpenClaw (Bash)',
+      onClick: () => onConfigureProvider(record, 'openclaw', 'bash'),
+    },
+    {
+      node: 'item',
+      key: 'openclaw-fish',
+      name: 'OpenClaw (fish)',
+      onClick: () => onConfigureProvider(record, 'openclaw', 'fish'),
+    },
+  ];
 
   return (
     <Space wrap>
@@ -380,6 +396,13 @@ const renderOperations = (
           ></Button>
         </Dropdown>
       </SplitButtonGroup>
+
+      <Dropdown trigger='click' position='bottomRight' menu={configProviders}>
+        <Button size='small' type='tertiary'>
+          {t('一键配置')}
+          <IconTreeTriangleDown style={{ marginLeft: 2 }} />
+        </Button>
+      </Dropdown>
 
       {record.status === 1 ? (
         <Button
@@ -444,6 +467,7 @@ export const getTokensColumns = ({
   loadingTokenKeys,
   toggleTokenVisibility,
   copyTokenKey,
+  onConfigureProvider,
   manageToken,
   onOpenLink,
   setEditingToken,
@@ -523,6 +547,7 @@ export const getTokensColumns = ({
           text,
           record,
           onOpenLink,
+          onConfigureProvider,
           setEditingToken,
           setShowEdit,
           manageToken,

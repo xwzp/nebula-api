@@ -33,14 +33,39 @@ type Model struct {
 	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
 	UpdatedTime  int64          `json:"updated_time" gorm:"bigint"`
 	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:uk_model_name_delete_at,priority:2"`
+	NameRule     int            `json:"name_rule" gorm:"default:0"`
 
+	// Model capability fields (0 / "" = not set, falls through to fallback/default)
+	ContextWindow   int    `json:"context_window" gorm:"default:0"`
+	MaxOutputTokens int    `json:"max_output_tokens" gorm:"default:0"`
+	Reasoning       int    `json:"reasoning" gorm:"default:0"`                        // 0=not set, 1=supported, 2=not supported
+	InputModalities string `json:"input_modalities,omitempty" gorm:"type:varchar(255)"` // JSON array, e.g. ["text","image"]
+
+	// Runtime-only fields (populated by enrichModels / ResolveCapabilities)
 	BoundChannels []BoundChannel `json:"bound_channels,omitempty" gorm:"-"`
 	EnableGroups  []string       `json:"enable_groups,omitempty" gorm:"-"`
 	QuotaTypes    []int          `json:"quota_types,omitempty" gorm:"-"`
-	NameRule      int            `json:"name_rule" gorm:"default:0"`
 
 	MatchedModels []string `json:"matched_models,omitempty" gorm:"-"`
 	MatchedCount  int      `json:"matched_count,omitempty" gorm:"-"`
+
+	// Effective capability values (resolved from 3-tier priority)
+	EffectiveContextWindow   int      `json:"effective_context_window,omitempty" gorm:"-"`
+	EffectiveMaxOutputTokens int      `json:"effective_max_output_tokens,omitempty" gorm:"-"`
+	EffectiveReasoning       int      `json:"effective_reasoning,omitempty" gorm:"-"`
+	EffectiveInputModalities []string `json:"effective_input_modalities,omitempty" gorm:"-"`
+
+	// Source indicators: "override" | "fallback" | "default"
+	ContextWindowSource   string `json:"context_window_source,omitempty" gorm:"-"`
+	MaxOutputTokensSource string `json:"max_output_tokens_source,omitempty" gorm:"-"`
+	ReasoningSource       string `json:"reasoning_source,omitempty" gorm:"-"`
+	InputModalitiesSource string `json:"input_modalities_source,omitempty" gorm:"-"`
+
+	// Fallback reference values (always populated for frontend display)
+	FallbackContextWindow   int      `json:"fallback_context_window,omitempty" gorm:"-"`
+	FallbackMaxOutputTokens int      `json:"fallback_max_output_tokens,omitempty" gorm:"-"`
+	FallbackReasoning       int      `json:"fallback_reasoning,omitempty" gorm:"-"`
+	FallbackInputModalities []string `json:"fallback_input_modalities,omitempty" gorm:"-"`
 }
 
 func (mi *Model) Insert() error {
@@ -59,8 +84,12 @@ func (mi *Model) Insert() error {
 
 	// 使用保存的原始值进行更新，确保零值能正确保存
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).Updates(map[string]interface{}{
-		"status":        originalStatus,
-		"sync_official": originalSyncOfficial,
+		"status":           originalStatus,
+		"sync_official":    originalSyncOfficial,
+		"context_window":   mi.ContextWindow,
+		"max_output_tokens": mi.MaxOutputTokens,
+		"reasoning":        mi.Reasoning,
+		"input_modalities": mi.InputModalities,
 	}).Error
 }
 
@@ -77,7 +106,9 @@ func (mi *Model) Update() error {
 	mi.UpdatedTime = common.GetTimestamp()
 	// 使用 Select 强制更新所有字段，包括零值
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).
-		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time").
+		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule",
+			"context_window", "max_output_tokens", "reasoning", "input_modalities",
+			"updated_time").
 		Updates(mi).Error
 }
 
