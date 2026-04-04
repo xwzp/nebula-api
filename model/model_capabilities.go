@@ -239,6 +239,23 @@ func ResolveOpenClawAPI(modelName string) string {
 	}
 }
 
+// openClawAllowedInputs is the set of input modalities that OpenClaw accepts.
+var openClawAllowedInputs = map[string]bool{"text": true, "image": true}
+
+// filterInputForOpenClaw keeps only modalities that OpenClaw supports.
+func filterInputForOpenClaw(modalities []string) []string {
+	filtered := make([]string, 0, len(modalities))
+	for _, m := range modalities {
+		if openClawAllowedInputs[m] {
+			filtered = append(filtered, m)
+		}
+	}
+	if len(filtered) == 0 {
+		return DefaultInputModalities
+	}
+	return filtered
+}
+
 // GetModelsWithCapabilities resolves capability metadata for a list of model names
 // and returns them in OpenClaw-compatible format.
 func GetModelsWithCapabilities(modelNames []string) []OpenClawModelInfo {
@@ -273,7 +290,7 @@ func GetModelsWithCapabilities(modelNames []string) []OpenClawModelInfo {
 			ID:            name,
 			Name:          displayName,
 			Reasoning:     m.EffectiveReasoning == ReasoningSupported,
-			Input:         m.EffectiveInputModalities,
+			Input:         filterInputForOpenClaw(m.EffectiveInputModalities),
 			ContextWindow: m.EffectiveContextWindow,
 			MaxTokens:     m.EffectiveMaxOutputTokens,
 			API:           ResolveOpenClawAPI(name),
