@@ -2,11 +2,13 @@ package monitor
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -38,6 +40,72 @@ func SanitizeBase64(data []byte) []byte {
 			string([]byte{byte('0' + sizeKB/100%10), byte('0' + sizeKB/10%10), byte('0' + sizeKB%10)}),
 			"0"), "") + `KB]"`)
 	})
+}
+
+// SanitizeLongStrings parses data as JSON, truncates any string values longer
+// than maxLen runes, and re-serializes. Preserves full JSON structure so
+// metadata fields like cache_control remain visible even when sibling text
+// fields are very large. Returns data unchanged if it is not valid JSON.
+func SanitizeLongStrings(data []byte, maxLen int) []byte {
+	if len(data) == 0 {
+		return data
+	}
+	// Quick check: only attempt JSON parse for objects or arrays
+	first := data[0]
+	if first != '{' && first != '[' {
+		return data
+	}
+
+	var parsed any
+	if err := common.Unmarshal(data, &parsed); err != nil {
+		return data
+	}
+
+	truncateStrings(parsed, maxLen)
+
+	result, err := common.Marshal(parsed)
+	if err != nil {
+		return data
+	}
+	return result
+}
+
+// truncateStrings recursively walks a JSON value tree and truncates long string values in-place.
+func truncateStrings(v any, maxLen int) {
+	switch val := v.(type) {
+	case map[string]any:
+		for k, child := range val {
+			if str, ok := child.(string); ok {
+				runeCount := utf8.RuneCountInString(str)
+				if runeCount > maxLen {
+					runes := []rune(str)
+					prefixLen := 200
+					if prefixLen > maxLen {
+						prefixLen = maxLen
+					}
+					val[k] = fmt.Sprintf("%s...[+%d chars]", string(runes[:prefixLen]), runeCount-prefixLen)
+				}
+			} else {
+				truncateStrings(child, maxLen)
+			}
+		}
+	case []any:
+		for i, child := range val {
+			if str, ok := child.(string); ok {
+				runeCount := utf8.RuneCountInString(str)
+				if runeCount > maxLen {
+					runes := []rune(str)
+					prefixLen := 200
+					if prefixLen > maxLen {
+						prefixLen = maxLen
+					}
+					val[i] = fmt.Sprintf("%s...[+%d chars]", string(runes[:prefixLen]), runeCount-prefixLen)
+				}
+			} else {
+				truncateStrings(child, maxLen)
+			}
+		}
+	}
 }
 
 // CaptureHeaders converts http.Header to a simple map, redacting sensitive values.
@@ -87,6 +155,7 @@ func CaptureBodyFromBytes(data []byte, maxBytes int) *CapturedHTTP {
 		}
 	}
 	sanitized := SanitizeBase64(data)
+	sanitized = SanitizeLongStrings(sanitized, DefaultMaxStringLen)
 	body, truncated := TruncateBody(sanitized, maxBytes)
 	return &CapturedHTTP{
 		Body:      body,

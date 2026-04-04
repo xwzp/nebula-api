@@ -5,8 +5,12 @@ import (
 )
 
 const (
-	// DefaultMaxBodyBytes is the default maximum body capture size (4KB)
-	DefaultMaxBodyBytes = 4096
+	// DefaultMaxBodyBytes is the default maximum body capture size (64KB).
+	// After SanitizeLongStrings processing, most bodies are well under this limit.
+	DefaultMaxBodyBytes = 65536
+	// DefaultMaxStringLen is the max rune count for individual JSON string values
+	// before they are truncated by SanitizeLongStrings.
+	DefaultMaxStringLen = 512
 	// DefaultTimeout is the default monitoring session timeout
 	DefaultTimeout = 5 * time.Minute
 	// DefaultMaxTraces is the maximum number of traces kept per session
