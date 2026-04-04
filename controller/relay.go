@@ -72,8 +72,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	//originalModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 
 	var (
-		newAPIError *types.NewAPIError
-		ws          *websocket.Conn
+		newAPIError      *types.NewAPIError
+		ws               *websocket.Conn
+		monitorCapWriter *monitor.CapturingResponseWriter
 	)
 
 	if relayFormat == types.RelayFormatOpenAIRealtime {
@@ -103,6 +104,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 					"error": newAPIError.ToOpenAIError(),
 				})
 			}
+		}
+		// On error, c.JSON() above writes through monitorCapWriter,
+		// so Stage 4 body is captured for both success and error paths.
+		if monitorCapWriter != nil {
+			monitor.CaptureClientResponse(c, monitorCapWriter)
+			monitor.FinalizeAndBroadcast(c)
 		}
 	}()
 
@@ -179,7 +186,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}()
 
 	// Install CapturingResponseWriter for relay monitoring (Stage 4)
-	var monitorCapWriter *monitor.CapturingResponseWriter
 	monitorActive := monitor.Hub.HasActiveSessions()
 	if monitorActive {
 		monitorCapWriter = monitor.NewCapturingResponseWriter(c.Writer)
@@ -238,11 +244,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 
 		if newAPIError == nil {
-			// Stage 4: Capture client response and broadcast trace
-			if monitorCapWriter != nil {
-				monitor.CaptureClientResponse(c, monitorCapWriter)
-				monitor.FinalizeAndBroadcast(c)
-			}
 			relayInfo.LastError = nil
 			return
 		}
