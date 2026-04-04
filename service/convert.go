@@ -159,10 +159,10 @@ func ClaudeToOpenAIRequest(claudeRequest dto.ClaudeRequest, info *relaycommon.Re
 				case "image":
 					// Handle image conversion (base64 to URL or keep as is)
 					imageData := fmt.Sprintf("data:%s;base64,%s", mediaMsg.Source.MediaType, mediaMsg.Source.Data)
+					//textContent += fmt.Sprintf("[Image: %s]", imageData)
 					mediaMessage := dto.MediaContent{
-						Type:         "image_url",
-						ImageUrl:     &dto.MessageImageUrl{Url: imageData},
-						CacheControl: mediaMsg.CacheControl,
+						Type:     "image_url",
+						ImageUrl: &dto.MessageImageUrl{Url: imageData},
 					}
 					mediaMessages = append(mediaMessages, mediaMessage)
 				case "tool_use":
