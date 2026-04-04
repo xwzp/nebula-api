@@ -221,6 +221,22 @@ type OpenClawModelInfo struct {
 	Input         []string `json:"input"`
 	ContextWindow int      `json:"contextWindow"`
 	MaxTokens     int      `json:"maxTokens"`
+	API           string   `json:"api"`
+}
+
+// ResolveOpenClawAPI returns the OpenClaw API format for a given model name.
+func ResolveOpenClawAPI(modelName string) string {
+	lower := strings.ToLower(modelName)
+	switch {
+	case strings.HasPrefix(lower, "claude-"):
+		return "anthropic-messages"
+	case strings.HasPrefix(lower, "gemini-"):
+		return "google-generative-ai"
+	case strings.HasPrefix(lower, "codex-"):
+		return "openai-codex-responses"
+	default:
+		return "openai-completions"
+	}
 }
 
 // GetModelsWithCapabilities resolves capability metadata for a list of model names
@@ -260,6 +276,7 @@ func GetModelsWithCapabilities(modelNames []string) []OpenClawModelInfo {
 			Input:         m.EffectiveInputModalities,
 			ContextWindow: m.EffectiveContextWindow,
 			MaxTokens:     m.EffectiveMaxOutputTokens,
+			API:           ResolveOpenClawAPI(name),
 		})
 	}
 	return result

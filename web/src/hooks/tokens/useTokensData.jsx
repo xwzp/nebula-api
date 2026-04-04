@@ -217,12 +217,11 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
       }
       const serverAddress = getServerAddress();
       const providerKey =
-        'nebula-' + (record.name || 'default').replace(/\s+/g, '-').toLowerCase();
+        'nebula-' + (record.name || 'default').replace(/\s+/g, '-');
       const providerConfig = {};
       providerConfig[providerKey] = {
         baseUrl: serverAddress + '/v1',
         apiKey: `sk-${fullKey}`,
-        api: 'openai-completions',
         models: data || [],
       };
       const providerJson = JSON.stringify(providerConfig, null, 2);
