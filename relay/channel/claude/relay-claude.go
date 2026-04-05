@@ -713,6 +713,9 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 	if claudeResponse.Delta != nil && claudeResponse.Delta.StopReason != nil {
 		maybeMarkClaudeRefusal(c, *claudeResponse.Delta.StopReason)
 	}
+	// Reverse-map tool names for Claude OAuth channel
+	reverseMap, _ := c.Get(relaycommon.ContextKeyToolReverseMap)
+
 	if info.RelayFormat == types.RelayFormatClaude {
 		FormatClaudeResponseInfo(&claudeResponse, nil, claudeInfo)
 
@@ -728,6 +731,9 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 				data = patchClaudeMessageDeltaUsageData(data, buildMessageDeltaPatchUsage(&claudeResponse, claudeInfo))
 			}
 		}
+		if reverseMap != nil {
+			data = relaycommon.ReverseMapToolNamesInJSON(data, reverseMap.(map[string]string))
+		}
 		helper.ClaudeChunkData(c, claudeResponse, data)
 	} else if info.RelayFormat == types.RelayFormatOpenAI {
 		response := StreamResponseClaude2OpenAI(&claudeResponse)
@@ -736,6 +742,9 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 			return nil
 		}
 
+		if reverseMap != nil {
+			reverseMapToolNamesInOpenAIStream(response, reverseMap.(map[string]string))
+		}
 		err = helper.ObjectData(c, response)
 		if err != nil {
 			logger.LogError(c, "send_stream_response_failed: "+err.Error())
@@ -815,17 +824,26 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		claudeInfo.Usage.ClaudeCacheCreation5mTokens = claudeResponse.Usage.GetCacheCreation5mTokens()
 		claudeInfo.Usage.ClaudeCacheCreation1hTokens = claudeResponse.Usage.GetCacheCreation1hTokens()
 	}
+	// Reverse-map tool names for Claude OAuth channel
+	reverseMap, _ := c.Get(relaycommon.ContextKeyToolReverseMap)
+
 	var responseData []byte
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
 		openaiResponse := ResponseClaude2OpenAI(&claudeResponse)
 		openaiResponse.Usage = *claudeInfo.Usage
+		if reverseMap != nil {
+			reverseMapToolNamesInOpenAIResponse(openaiResponse, reverseMap.(map[string]string))
+		}
 		responseData, err = json.Marshal(openaiResponse)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeBadResponseBody)
 		}
 	case types.RelayFormatClaude:
 		responseData = data
+		if reverseMap != nil {
+			responseData = []byte(relaycommon.ReverseMapToolNamesInJSON(string(responseData), reverseMap.(map[string]string)))
+		}
 	}
 
 	if claudeResponse.Usage != nil && claudeResponse.Usage.ServerToolUse != nil && claudeResponse.Usage.ServerToolUse.WebSearchRequests > 0 {
@@ -909,4 +927,46 @@ func mapToolChoice(toolChoice any, parallelToolCalls *bool) *dto.ClaudeToolChoic
 	}
 
 	return claudeToolChoice
+}
+
+// reverseMapToolNamesInOpenAIStream renames tool names in a streaming OpenAI
+// response chunk using the reverse mapping (Claude Code CLI → OpenClaw).
+func reverseMapToolNamesInOpenAIStream(response *dto.ChatCompletionsStreamResponse, reverseMap map[string]string) {
+	if response == nil {
+		return
+	}
+	for i := range response.Choices {
+		if response.Choices[i].Delta.ToolCalls != nil {
+			for j := range response.Choices[i].Delta.ToolCalls {
+				if original, ok := reverseMap[response.Choices[i].Delta.ToolCalls[j].Function.Name]; ok {
+					response.Choices[i].Delta.ToolCalls[j].Function.Name = original
+				}
+			}
+		}
+	}
+}
+
+// reverseMapToolNamesInOpenAIResponse renames tool names in a non-streaming
+// OpenAI response using the reverse mapping (Claude Code CLI → OpenClaw).
+// Message.ToolCalls is json.RawMessage, so we parse, modify, and re-set.
+func reverseMapToolNamesInOpenAIResponse(response *dto.OpenAITextResponse, reverseMap map[string]string) {
+	if response == nil {
+		return
+	}
+	for i := range response.Choices {
+		toolCalls := response.Choices[i].Message.ParseToolCalls()
+		if len(toolCalls) == 0 {
+			continue
+		}
+		modified := false
+		for j := range toolCalls {
+			if original, ok := reverseMap[toolCalls[j].Function.Name]; ok {
+				toolCalls[j].Function.Name = original
+				modified = true
+			}
+		}
+		if modified {
+			response.Choices[i].Message.SetToolCalls(toolCalls)
+		}
+	}
 }
