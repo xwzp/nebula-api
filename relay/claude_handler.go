@@ -151,8 +151,8 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 		}
 
-		// sanitize client fingerprints for Claude OAuth channel
-		if info.ChannelType == constant.ChannelTypeClaudeOAuth {
+		// sanitize client fingerprints for Anthropic Claude channels
+		if info.ChannelType == constant.ChannelTypeClaudeOAuth || info.ChannelType == constant.ChannelTypeAnthropic {
 			jsonData, err = claude_oauth.SanitizeClientFingerprints(jsonData)
 			if err != nil {
 				return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
