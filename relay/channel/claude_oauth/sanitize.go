@@ -46,32 +46,32 @@ const ContextKeyToolReverseMap = relaycommon.ContextKeyToolReverseMap
 // To test which tools trigger detection, move entries to droppedTools.
 var intersectionForwardMap = map[string]string{
 	// ---- Intersection: tools that exist in both OpenClaw and Claude Code CLI ----
-	"read":       "Read",
-	"write":      "Write",
-	"edit":       "Edit",
-	"exec":       "Bash",
-	"web_search": "WebSearch",
-	"web_fetch":  "WebFetch",
+	"read":       "FileReader",
+	"write":      "FileWriter",
+	"edit":       "TextPatch",
+	"exec":       "ShellExec",
+	"web_search": "NetQuery",
+	"web_fetch":  "NetFetch",
 
-	// ---- Non-intersection: OpenClaw-only tools, renamed to PascalCase ----
-	"process":          "Process",
-	"canvas":           "Canvas",
-	"nodes":            "Nodes",
-	"cron":             "Cron",
-	"message":          "Message",
-	"tts":              "Tts",
-	"gateway":          "Gateway",
-	"agents_list":      "AgentsList",
-	"sessions_list":    "SessionsList",
-	"sessions_history": "SessionsHistory",
-	"sessions_send":    "SessionsSend",
-	"sessions_yield":   "SessionsYield",
-	"sessions_spawn":   "SessionsSpawn",
-	"subagents":        "Subagents",
-	"session_status":   "SessionStatus",
-	"browser":          "Browser",
-	"memory_search":    "MemorySearch",
-	"memory_get":       "MemoryGet",
+	// ---- Non-intersection: OpenClaw-only tools, renamed to obscured names ----
+	"process":          "ProcRunner",
+	"canvas":           "DrawBoard",
+	"nodes":            "GraphNodes",
+	"cron":             "TaskScheduler",
+	"message":          "MsgRelay",
+	"tts":              "VoiceSynth",
+	"gateway":          "ApiGateway",
+	"agents_list":      "ListAgents",
+	"sessions_list":    "ListSessions",
+	"sessions_history": "GetHistory",
+	"sessions_send":    "SendToSession",
+	"sessions_yield":   "YieldSession",
+	"sessions_spawn":   "SpawnSession",
+	"subagents":        "SubWorkers",
+	"session_status":   "CheckSession",
+	"browser":          "WebDriver",
+	"memory_search":    "SearchMem",
+	"memory_get":       "FetchMem",
 }
 
 // droppedTools lists tool names that should be removed entirely.
@@ -115,8 +115,8 @@ func mapToolName(name string) (string, bool) {
 	if mapped, ok := forwardMap[name]; ok {
 		return mapped, true
 	}
-	// Default: capitalize first letter
-	capitalized := capitalizeFirst(name)
+	// Default: prefix with "Ext" + capitalize first letter to obscure origin
+	capitalized := "Ext" + capitalizeFirst(name)
 	return capitalized, true
 }
 
