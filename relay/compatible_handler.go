@@ -186,6 +186,9 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 			if reverseMap != nil {
 				c.Set(claude_oauth.ContextKeyToolReverseMap, reverseMap)
 			}
+			if len(claude_oauth.ParamNameReverseMap) > 0 {
+				c.Set(claude_oauth.ContextKeyParamReverseMap, claude_oauth.ParamNameReverseMap)
+			}
 		}
 
 		// apply param override

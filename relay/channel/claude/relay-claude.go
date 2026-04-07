@@ -713,8 +713,9 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 	if claudeResponse.Delta != nil && claudeResponse.Delta.StopReason != nil {
 		maybeMarkClaudeRefusal(c, *claudeResponse.Delta.StopReason)
 	}
-	// Reverse-map tool names for Claude OAuth channel
+	// Reverse-map tool names and param names for sanitized channels
 	reverseMap, _ := c.Get(relaycommon.ContextKeyToolReverseMap)
+	paramReverseMap, _ := c.Get(relaycommon.ContextKeyParamReverseMap)
 
 	if info.RelayFormat == types.RelayFormatClaude {
 		FormatClaudeResponseInfo(&claudeResponse, nil, claudeInfo)
@@ -734,6 +735,9 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		if reverseMap != nil {
 			data = relaycommon.ReverseMapToolNamesInJSON(data, reverseMap.(map[string]string))
 		}
+		if paramReverseMap != nil {
+			data = relaycommon.ReverseMapParamNamesInJSON(data, paramReverseMap.(map[string]string))
+		}
 		helper.ClaudeChunkData(c, claudeResponse, data)
 	} else if info.RelayFormat == types.RelayFormatOpenAI {
 		response := StreamResponseClaude2OpenAI(&claudeResponse)
@@ -744,6 +748,9 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 
 		if reverseMap != nil {
 			reverseMapToolNamesInOpenAIStream(response, reverseMap.(map[string]string))
+		}
+		if paramReverseMap != nil {
+			reverseMapParamNamesInOpenAIStream(response, paramReverseMap.(map[string]string))
 		}
 		err = helper.ObjectData(c, response)
 		if err != nil {
@@ -824,8 +831,9 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		claudeInfo.Usage.ClaudeCacheCreation5mTokens = claudeResponse.Usage.GetCacheCreation5mTokens()
 		claudeInfo.Usage.ClaudeCacheCreation1hTokens = claudeResponse.Usage.GetCacheCreation1hTokens()
 	}
-	// Reverse-map tool names for Claude OAuth channel
+	// Reverse-map tool names and param names for sanitized channels
 	reverseMap, _ := c.Get(relaycommon.ContextKeyToolReverseMap)
+	paramReverseMap, _ := c.Get(relaycommon.ContextKeyParamReverseMap)
 
 	var responseData []byte
 	switch info.RelayFormat {
@@ -835,6 +843,9 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		if reverseMap != nil {
 			reverseMapToolNamesInOpenAIResponse(openaiResponse, reverseMap.(map[string]string))
 		}
+		if paramReverseMap != nil {
+			reverseMapParamNamesInOpenAIResponse(openaiResponse, paramReverseMap.(map[string]string))
+		}
 		responseData, err = json.Marshal(openaiResponse)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeBadResponseBody)
@@ -843,6 +854,9 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		responseData = data
 		if reverseMap != nil {
 			responseData = []byte(relaycommon.ReverseMapToolNamesInJSON(string(responseData), reverseMap.(map[string]string)))
+		}
+		if paramReverseMap != nil {
+			responseData = []byte(relaycommon.ReverseMapParamNamesInJSON(string(responseData), paramReverseMap.(map[string]string)))
 		}
 	}
 
@@ -946,6 +960,25 @@ func reverseMapToolNamesInOpenAIStream(response *dto.ChatCompletionsStreamRespon
 	}
 }
 
+// reverseMapParamNamesInOpenAIStream renames parameter names inside
+// Function.Arguments (incremental JSON fragments) in streaming OpenAI responses.
+func reverseMapParamNamesInOpenAIStream(response *dto.ChatCompletionsStreamResponse, paramReverseMap map[string]string) {
+	if response == nil {
+		return
+	}
+	for i := range response.Choices {
+		if response.Choices[i].Delta.ToolCalls != nil {
+			for j := range response.Choices[i].Delta.ToolCalls {
+				args := response.Choices[i].Delta.ToolCalls[j].Function.Arguments
+				if args == "" {
+					continue
+				}
+				response.Choices[i].Delta.ToolCalls[j].Function.Arguments = relaycommon.ReverseMapParamNamesInJSON(args, paramReverseMap)
+			}
+		}
+	}
+}
+
 // reverseMapToolNamesInOpenAIResponse renames tool names in a non-streaming
 // OpenAI response using the reverse mapping (Claude Code CLI → OpenClaw).
 // Message.ToolCalls is json.RawMessage, so we parse, modify, and re-set.
@@ -962,6 +995,35 @@ func reverseMapToolNamesInOpenAIResponse(response *dto.OpenAITextResponse, rever
 		for j := range toolCalls {
 			if original, ok := reverseMap[toolCalls[j].Function.Name]; ok {
 				toolCalls[j].Function.Name = original
+				modified = true
+			}
+		}
+		if modified {
+			response.Choices[i].Message.SetToolCalls(toolCalls)
+		}
+	}
+}
+
+// reverseMapParamNamesInOpenAIResponse renames parameter names inside
+// Function.Arguments (a JSON string) for each tool call in an OpenAI response.
+func reverseMapParamNamesInOpenAIResponse(response *dto.OpenAITextResponse, paramReverseMap map[string]string) {
+	if response == nil {
+		return
+	}
+	for i := range response.Choices {
+		toolCalls := response.Choices[i].Message.ParseToolCalls()
+		if len(toolCalls) == 0 {
+			continue
+		}
+		modified := false
+		for j := range toolCalls {
+			args := toolCalls[j].Function.Arguments
+			if args == "" {
+				continue
+			}
+			newArgs := relaycommon.ReverseMapParamNamesInJSON(args, paramReverseMap)
+			if newArgs != args {
+				toolCalls[j].Function.Arguments = newArgs
 				modified = true
 			}
 		}

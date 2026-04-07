@@ -21,6 +21,9 @@ var openClawRe = regexp.MustCompile("(?i)openclaw")
 // ContextKeyToolReverseMap re-exports the shared context key for convenience.
 const ContextKeyToolReverseMap = relaycommon.ContextKeyToolReverseMap
 
+// ContextKeyParamReverseMap re-exports the shared context key for convenience.
+const ContextKeyParamReverseMap = relaycommon.ContextKeyParamReverseMap
+
 // ---------------------------------------------------------------------------
 // Tool name mapping configuration
 //
@@ -299,8 +302,8 @@ func ExtractAndCleanReverseMap(jsonData []byte) (cleaned []byte, reverseMap map[
 	return jsonData, nil, nil
 }
 
-// renameToolUseInMessages renames tool names in assistant message content blocks
-// of type "tool_use". Uses the full reverse map to find the forward mapping.
+// renameToolUseInMessages renames tool names AND input parameter keys in
+// assistant message content blocks of type "tool_use".
 func renameToolUseInMessages(data map[string]interface{}, fullReverse map[string]string) {
 	// Build a forward lookup from the reverse map
 	fwd := make(map[string]string, len(fullReverse))
@@ -342,10 +345,74 @@ func renameToolUseInMessages(data map[string]interface{}, fullReverse map[string
 			if typ != "tool_use" {
 				continue
 			}
-			if name, ok := block["name"].(string); ok {
-				if newName, exists := fwd[name]; exists {
-					block["name"] = newName
+			originalName, _ := block["name"].(string)
+			// Rename tool name
+			if newName, exists := fwd[originalName]; exists {
+				block["name"] = newName
+			}
+			// Rename input parameter keys
+			if inputAny, ok := block["input"]; ok {
+				if inputMap, ok := inputAny.(map[string]interface{}); ok {
+					renameInputKeys(originalName, inputMap)
 				}
+			}
+		}
+	}
+}
+
+// renameInputKeys renames the keys in a tool_use input map according to
+// toolParamOverrides.  Also handles nested objects (e.g. edits[].oldText).
+func renameInputKeys(originalToolName string, input map[string]interface{}) {
+	cfg, ok := toolParamOverrides[originalToolName]
+	if !ok {
+		return
+	}
+
+	// Collect renames to apply (can't mutate map while iterating)
+	type rename struct {
+		oldKey string
+		newKey string
+	}
+	var renames []rename
+	for oldKey := range input {
+		if remap, found := cfg.Props[oldKey]; found && remap.Name != "" && remap.Name != oldKey {
+			renames = append(renames, rename{oldKey, remap.Name})
+		}
+	}
+	for _, r := range renames {
+		input[r.newKey] = input[r.oldKey]
+		delete(input, r.oldKey)
+	}
+
+	// Handle nested overrides (e.g. edits is an array of objects)
+	for _, nested := range cfg.Nested {
+		// Find the array under its NEW name (already renamed above)
+		arrayKey := nested.ArrayPropName
+		if remap, ok := cfg.Props[arrayKey]; ok && remap.Name != "" {
+			arrayKey = remap.Name
+		}
+		arrAny, ok := input[arrayKey]
+		if !ok {
+			continue
+		}
+		arr, ok := arrAny.([]interface{})
+		if !ok {
+			continue
+		}
+		for _, itemAny := range arr {
+			itemMap, ok := itemAny.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			var nestedRenames []rename
+			for oldKey := range itemMap {
+				if remap, found := nested.Items[oldKey]; found && remap.Name != "" && remap.Name != oldKey {
+					nestedRenames = append(nestedRenames, rename{oldKey, remap.Name})
+				}
+			}
+			for _, r := range nestedRenames {
+				itemMap[r.newKey] = itemMap[r.oldKey]
+				delete(itemMap, r.oldKey)
 			}
 		}
 	}
@@ -426,11 +493,22 @@ func sanitizeSystem(data map[string]interface{}) {
 	}
 }
 
-// replaceOpenClaw replaces all case-insensitive occurrences of "openclaw"
-// with "the client".
+// replaceOpenClaw replaces case-insensitive "openclaw" with "the client",
+// but preserves path components like ".openclaw" or "/openclaw".
 func replaceOpenClaw(text string) string {
-	if !strings.Contains(strings.ToLower(text), "openclaw") {
+	lower := strings.ToLower(text)
+	if !strings.Contains(lower, "openclaw") {
 		return text
 	}
-	return openClawRe.ReplaceAllString(text, "the client")
+	// Protect path patterns before replacing
+	text = strings.ReplaceAll(text, ".openclaw", "\x00PATHOC_DOT\x00")
+	text = strings.ReplaceAll(text, ".OpenClaw", "\x00PATHOC_DOT\x00")
+	text = strings.ReplaceAll(text, "/openclaw", "\x00PATHOC_SLASH\x00")
+	text = strings.ReplaceAll(text, "/OpenClaw", "\x00PATHOC_SLASH\x00")
+	// Do the replacement
+	text = openClawRe.ReplaceAllString(text, "the client")
+	// Restore protected paths
+	text = strings.ReplaceAll(text, "\x00PATHOC_DOT\x00", ".openclaw")
+	text = strings.ReplaceAll(text, "\x00PATHOC_SLASH\x00", "/openclaw")
+	return text
 }

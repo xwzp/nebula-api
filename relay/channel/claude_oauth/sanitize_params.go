@@ -518,3 +518,26 @@ func applyNestedOverride(schema map[string]interface{}, nested nestedOverride, t
 
 	rewriteProperties(itemsMap, nested.Items)
 }
+
+// ParamNameReverseMap maps remapped param names back to original OpenClaw
+// param names.  Built once at init time from toolParamOverrides.
+// Key = remapped name (e.g. "h1"), Value = original name (e.g. "content").
+var ParamNameReverseMap map[string]string
+
+func init() {
+	ParamNameReverseMap = make(map[string]string)
+	for _, cfg := range toolParamOverrides {
+		for origName, remap := range cfg.Props {
+			if remap.Name != "" && remap.Name != origName {
+				ParamNameReverseMap[remap.Name] = origName
+			}
+		}
+		for _, nested := range cfg.Nested {
+			for origName, remap := range nested.Items {
+				if remap.Name != "" && remap.Name != origName {
+					ParamNameReverseMap[remap.Name] = origName
+				}
+			}
+		}
+	}
+}
