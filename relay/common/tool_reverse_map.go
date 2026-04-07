@@ -13,24 +13,31 @@ const ContextKeyToolReverseMap = "tool_name_reverse_map"
 const ContextKeyParamReverseMap = "param_name_reverse_map"
 
 // ReverseMapToolNamesInJSON replaces tool names in a raw JSON string using
-// the provided reverse mapping. Used for Claude-format responses where the
-// raw JSON is forwarded directly.
+// the provided reverse mapping. Handles both unescaped and escaped forms.
 func ReverseMapToolNamesInJSON(data string, reverseMap map[string]string) string {
 	for from, to := range reverseMap {
+		// Unescaped form (top-level SSE JSON)
 		data = strings.ReplaceAll(data, `"name":"`+from+`"`, `"name":"`+to+`"`)
 		data = strings.ReplaceAll(data, `"name": "`+from+`"`, `"name": "`+to+`"`)
+		// Escaped form (inside JSON string values)
+		data = strings.ReplaceAll(data, `\"name\":\"`+from+`\"`, `\"name\":\"`+to+`\"`)
+		data = strings.ReplaceAll(data, `\"name\": \"`+from+`\"`, `\"name\": \"`+to+`\"`)
 	}
 	return data
 }
 
 // ReverseMapParamNamesInJSON replaces parameter names (JSON object keys) in
-// a raw JSON string.  Matches the pattern "KEY": which is how JSON keys appear.
-// Only replaces keys that are in the reverse map (short random tokens like
-// "h1", "g2", etc.) so false-positive risk is minimal.
+// a raw JSON string.  Handles both unescaped ("key":) and escaped (\"key\":)
+// forms because in SSE streaming the partial_json value is a JSON-encoded
+// string where inner quotes are backslash-escaped.
 func ReverseMapParamNamesInJSON(data string, reverseMap map[string]string) string {
 	for from, to := range reverseMap {
+		// Unescaped form: "key": or "key":  (in non-streaming / parsed JSON)
 		data = strings.ReplaceAll(data, `"`+from+`":`, `"`+to+`":`)
 		data = strings.ReplaceAll(data, `"`+from+`": `, `"`+to+`": `)
+		// Escaped form: \"key\": or \"key\":  (inside SSE partial_json strings)
+		data = strings.ReplaceAll(data, `\"`+from+`\":`, `\"`+to+`\":`)
+		data = strings.ReplaceAll(data, `\"`+from+`\": `, `\"`+to+`\": `)
 	}
 	return data
 }
