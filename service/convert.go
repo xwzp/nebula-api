@@ -58,10 +58,38 @@ func ClaudeToOpenAIRequest(claudeRequest dto.ClaudeRequest, info *relaycommon.Re
 			openAIRequest.Reasoning = reasoningJSON
 		}
 	} else {
-		thinkingSuffix := "-thinking"
-		if strings.HasSuffix(info.OriginModelName, thinkingSuffix) &&
-			!strings.HasSuffix(openAIRequest.Model, thinkingSuffix) {
-			openAIRequest.Model = openAIRequest.Model + thinkingSuffix
+		// Map Anthropic thinking/effort to OpenAI reasoning_effort for non-OpenRouter channels.
+		// Priority: output_config.effort > thinking.type mapping > model name suffix fallback.
+		mapped := false
+		if effort := claudeRequest.GetEfforts(); effort != "" {
+			openAIRequest.ReasoningEffort = effort
+			mapped = true
+		}
+		if !mapped && claudeRequest.Thinking != nil {
+			switch claudeRequest.Thinking.Type {
+			case "enabled":
+				// Heuristic: map budget_tokens ranges to effort levels
+				budget := claudeRequest.Thinking.GetBudgetTokens()
+				switch {
+				case budget <= 1024:
+					openAIRequest.ReasoningEffort = "low"
+				case budget <= 8192:
+					openAIRequest.ReasoningEffort = "medium"
+				default:
+					openAIRequest.ReasoningEffort = "high"
+				}
+				mapped = true
+			case "adaptive":
+				openAIRequest.ReasoningEffort = "high"
+				mapped = true
+			}
+		}
+		if !mapped {
+			thinkingSuffix := "-thinking"
+			if strings.HasSuffix(info.OriginModelName, thinkingSuffix) &&
+				!strings.HasSuffix(openAIRequest.Model, thinkingSuffix) {
+				openAIRequest.Model = openAIRequest.Model + thinkingSuffix
+			}
 		}
 	}
 
