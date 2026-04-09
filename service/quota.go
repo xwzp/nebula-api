@@ -260,6 +260,7 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 	cacheCreationTokens5m := usage.ClaudeCacheCreation5mTokens
 	cacheCreationTokens1h := usage.ClaudeCacheCreation1hTokens
 
+	isClaudeUsageSemantic := relayInfo.GetFinalRequestRelayFormat() == types.RelayFormatClaude
 	if relayInfo.ChannelType == constant.ChannelTypeOpenRouter {
 		promptTokens -= cacheTokens
 		isUsingCustomSettings := relayInfo.PriceData.UsePrice || hasCustomModelRatio(modelName, relayInfo.PriceData.ModelRatio)
@@ -269,6 +270,10 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 				cacheCreationTokens = maybeCacheCreationTokens
 			}
 		}
+		promptTokens -= cacheCreationTokens
+	} else if !isClaudeUsageSemantic {
+		// 非 Claude 原生格式（如 sub2api 等 OpenAI 格式），prompt_tokens 包含缓存 tokens，需要减去
+		promptTokens -= cacheTokens
 		promptTokens -= cacheCreationTokens
 	}
 
