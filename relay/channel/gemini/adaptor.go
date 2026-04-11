@@ -1,10 +1,12 @@
 package gemini
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
@@ -40,6 +42,23 @@ func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayIn
 			}
 		}
 	}
+
+	// 为 Gemini 原生格式请求注入 thoughtSignature
+	// 当客户端（如 Chatbox）在多轮对话中未保留 model 回复的 thoughtSignature 时，
+	// Gemini API 会拒绝包含 inlineData 但缺少 thoughtSignature 的历史消息。
+	// 这里为缺失 thoughtSignature 的 model 消息中的 inlineData/functionCall part 补上 bypass 值。
+	if model_setting.GetGeminiSettings().FunctionCallThoughtSignatureEnabled {
+		for i, content := range request.Contents {
+			if content.Role == "model" {
+				for j, part := range content.Parts {
+					if (part.InlineData != nil || part.FunctionCall != nil) && len(part.ThoughtSignature) == 0 {
+						request.Contents[i].Parts[j].ThoughtSignature = json.RawMessage(strconv.Quote(thoughtSignatureBypassValue))
+					}
+				}
+			}
+		}
+	}
+
 	return request, nil
 }
 
