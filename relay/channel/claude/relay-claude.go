@@ -342,11 +342,17 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 				claudeMessage.Content = message.StringContent()
 			} else {
 				claudeMediaMessages := make([]dto.ClaudeMediaMessage, 0)
+				hasToolCalls := message.ToolCalls != nil
 				for _, mediaMessage := range message.ParseContent() {
 					claudeMediaMessage := dto.ClaudeMediaMessage{
 						Type: mediaMessage.Type,
 					}
 					if mediaMessage.Type == "text" {
+						// Skip empty text blocks when assistant message has tool_calls,
+						// because Claude API rejects empty text content blocks.
+						if hasToolCalls && strings.TrimSpace(mediaMessage.Text) == "" {
+							continue
+						}
 						claudeMediaMessage.Text = common.GetPointer[string](mediaMessage.Text)
 					} else {
 						imageUrl := mediaMessage.GetImageMedia()
