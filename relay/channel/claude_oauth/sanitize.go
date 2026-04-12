@@ -181,23 +181,128 @@ func capitalizeFirst(s string) string {
 	return string(upper) + s[size:]
 }
 
-// SanitizeClientFingerprints removes OpenClaw client fingerprints from a
-// Claude API request JSON body before forwarding to upstream.
+// ---------------------------------------------------------------------------
+// Client fingerprint detection
+// ---------------------------------------------------------------------------
+
+// detectOpenClaw returns true if the request appears to come from an OpenClaw
+// client. It checks:
+//  1. System prompt contains "openclaw" (case-insensitive, excluding paths).
+//  2. Any user message contains the "Sender (untrusted metadata)" block.
+func detectOpenClaw(data map[string]interface{}) bool {
+	// Check system prompt
+	if systemContains(data, openClawRe) {
+		return true
+	}
+	// Check user messages for Sender metadata block
+	if messagesContain(data, senderMetadataRe) {
+		return true
+	}
+	return false
+}
+
+// detectHermes returns true if the request appears to come from a Hermes Agent
+// client. It checks the system prompt for "Hermes Agent Persona".
+func detectHermes(data map[string]interface{}) bool {
+	return systemContains(data, hermesPersonaRe)
+}
+
+// hermesPersonaRe matches "Hermes Agent Persona" in system prompts.
+var hermesPersonaRe = regexp.MustCompile("Hermes Agent Persona")
+
+// systemContains returns true if the system prompt matches the given regex.
+func systemContains(data map[string]interface{}, re *regexp.Regexp) bool {
+	systemAny, ok := data["system"]
+	if !ok {
+		return false
+	}
+	switch s := systemAny.(type) {
+	case string:
+		return re.MatchString(s)
+	case []interface{}:
+		for _, itemAny := range s {
+			item, ok := itemAny.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if text, ok := item["text"].(string); ok {
+				if re.MatchString(text) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// messagesContain returns true if any user message text matches the given regex.
+func messagesContain(data map[string]interface{}, re *regexp.Regexp) bool {
+	messagesAny, ok := data["messages"]
+	if !ok {
+		return false
+	}
+	messages, ok := messagesAny.([]interface{})
+	if !ok {
+		return false
+	}
+	for _, msgAny := range messages {
+		msg, ok := msgAny.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+		if role != "user" {
+			continue
+		}
+		switch c := msg["content"].(type) {
+		case string:
+			if re.MatchString(c) {
+				return true
+			}
+		case []interface{}:
+			for _, itemAny := range c {
+				item, ok := itemAny.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if text, ok := item["text"].(string); ok {
+					if re.MatchString(text) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// SanitizeClientFingerprints detects client fingerprints in a Claude API
+// request JSON body and sanitizes them if the corresponding setting is enabled.
 //
-// It performs:
-//  1. Strips "Sender (untrusted metadata)" blocks from user message text.
-//  2. Replaces "OpenClaw"/"openclaw" with "the client" in system prompts.
-//  3. Renames tools and tool_use references in messages.
-func SanitizeClientFingerprints(jsonData []byte) ([]byte, error) {
+// Detection + action:
+//   - OpenClaw detected (system prompt contains "openclaw" or user messages
+//     contain "Sender (untrusted metadata)") AND openClawEnabled → full
+//     OpenClaw sanitization (strip metadata, replace mentions, rename tools).
+//   - Hermes detected (system prompt contains "Hermes Agent Persona") AND
+//     hermesEnabled → Hermes sanitization (replace mentions, fix empty blocks).
+func SanitizeClientFingerprints(jsonData []byte, openClawEnabled, hermesEnabled bool) ([]byte, error) {
 	var data map[string]interface{}
 	if err := common.Unmarshal(jsonData, &data); err != nil {
 		common.SysError("SanitizeClientFingerprints Unmarshal error: " + err.Error())
 		return jsonData, nil
 	}
 
-	sanitizeMessages(data)
-	sanitizeSystem(data)
-	sanitizeTools(data)
+	// Detect and sanitize OpenClaw fingerprints
+	if openClawEnabled && detectOpenClaw(data) {
+		sanitizeMessages(data)
+		sanitizeSystem(data)
+		sanitizeTools(data)
+	}
+
+	// Detect and sanitize Hermes Agent fingerprints
+	if hermesEnabled && detectHermes(data) {
+		sanitizeHermesMessages(data)
+	}
 
 	result, err := common.Marshal(data)
 	if err != nil {
@@ -511,4 +616,110 @@ func replaceOpenClaw(text string) string {
 	text = strings.ReplaceAll(text, "\x00PATHOC_DOT\x00", ".openclaw")
 	text = strings.ReplaceAll(text, "\x00PATHOC_SLASH\x00", "/openclaw")
 	return text
+}
+
+// ---------------------------------------------------------------------------
+// Hermes Agent sanitization
+// ---------------------------------------------------------------------------
+
+// hermesAgentRe matches "Hermes" as a word boundary (case-insensitive),
+// used for replacing Hermes mentions in system prompts.
+var hermesAgentRe = regexp.MustCompile("(?i)\\bhermes\\b")
+
+// sanitizeHermesMessages removes Hermes agent fingerprints from messages and
+// system prompts, and drops empty text content blocks that may result from
+// metadata stripping.
+func sanitizeHermesMessages(data map[string]interface{}) {
+	// Replace "Hermes" mentions in system prompts
+	sanitizeHermesSystem(data)
+
+	// Drop empty text content blocks from all messages to avoid
+	// "text content blocks must be non-empty" errors.
+	dropEmptyTextBlocks(data)
+}
+
+// sanitizeHermesSystem replaces Hermes mentions in system prompts.
+func sanitizeHermesSystem(data map[string]interface{}) {
+	systemAny, ok := data["system"]
+	if !ok {
+		return
+	}
+
+	switch s := systemAny.(type) {
+	case string:
+		data["system"] = replaceHermes(s)
+	case []interface{}:
+		for _, itemAny := range s {
+			item, ok := itemAny.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if text, ok := item["text"].(string); ok {
+				item["text"] = replaceHermes(text)
+			}
+		}
+	}
+}
+
+// replaceHermes replaces case-insensitive "hermes" with "the client".
+func replaceHermes(text string) string {
+	return hermesAgentRe.ReplaceAllString(text, "the client")
+}
+
+// dropEmptyTextBlocks removes text content blocks with empty or whitespace-only
+// text from messages. This prevents "text content blocks must be non-empty"
+// errors that occur when metadata stripping leaves empty text blocks.
+func dropEmptyTextBlocks(data map[string]interface{}) {
+	messagesAny, ok := data["messages"]
+	if !ok {
+		return
+	}
+	messages, ok := messagesAny.([]interface{})
+	if !ok {
+		return
+	}
+
+	for _, msgAny := range messages {
+		msg, ok := msgAny.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		contentAny, ok := msg["content"]
+		if !ok {
+			continue
+		}
+
+		switch c := contentAny.(type) {
+		case string:
+			// If string content is empty after trimming, set a single space
+			if strings.TrimSpace(c) == "" {
+				msg["content"] = " "
+			}
+		case []interface{}:
+			filtered := make([]interface{}, 0, len(c))
+			for _, itemAny := range c {
+				item, ok := itemAny.(map[string]interface{})
+				if !ok {
+					filtered = append(filtered, itemAny)
+					continue
+				}
+				typ, _ := item["type"].(string)
+				if typ == "text" {
+					text, _ := item["text"].(string)
+					if strings.TrimSpace(text) == "" {
+						continue // drop empty text block
+					}
+				}
+				filtered = append(filtered, item)
+			}
+			// If all blocks were dropped, keep at least one with a space
+			if len(filtered) == 0 {
+				filtered = append(filtered, map[string]interface{}{
+					"type": "text",
+					"text": " ",
+				})
+			}
+			msg["content"] = filtered
+		}
+	}
 }

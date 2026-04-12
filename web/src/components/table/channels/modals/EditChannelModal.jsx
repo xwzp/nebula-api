@@ -204,6 +204,8 @@ const EditChannelModal = (props) => {
     allow_include_obfuscation: false,
     allow_inference_geo: false,
     claude_beta_query: false,
+    enable_openclaw_obfuscation: false,
+    enable_hermes_obfuscation: false,
     upstream_model_update_check_enabled: false,
     upstream_model_update_auto_sync_enabled: false,
     upstream_model_update_last_check_time: 0,
@@ -887,6 +889,10 @@ const EditChannelModal = (props) => {
           data.allow_inference_geo =
             parsedSettings.allow_inference_geo || false;
           data.claude_beta_query = parsedSettings.claude_beta_query || false;
+          data.enable_openclaw_obfuscation =
+            parsedSettings.enable_openclaw_obfuscation || false;
+          data.enable_hermes_obfuscation =
+            parsedSettings.enable_hermes_obfuscation || false;
           data.upstream_model_update_check_enabled =
             parsedSettings.upstream_model_update_check_enabled === true;
           data.upstream_model_update_auto_sync_enabled =
@@ -916,6 +922,8 @@ const EditChannelModal = (props) => {
           data.allow_include_obfuscation = false;
           data.allow_inference_geo = false;
           data.claude_beta_query = false;
+          data.enable_openclaw_obfuscation = false;
+          data.enable_hermes_obfuscation = false;
           data.upstream_model_update_check_enabled = false;
           data.upstream_model_update_auto_sync_enabled = false;
           data.upstream_model_update_last_check_time = 0;
@@ -933,6 +941,8 @@ const EditChannelModal = (props) => {
         data.allow_include_obfuscation = false;
         data.allow_inference_geo = false;
         data.claude_beta_query = false;
+        data.enable_openclaw_obfuscation = false;
+        data.enable_hermes_obfuscation = false;
         data.upstream_model_update_check_enabled = false;
         data.upstream_model_update_auto_sync_enabled = false;
         data.upstream_model_update_last_check_time = 0;
@@ -1766,6 +1776,14 @@ const EditChannelModal = (props) => {
       }
     }
 
+    // type === 14 (Claude) 或 type === 58 (Claude OAuth): 客户端指纹混淆设置
+    if (localInputs.type === 14 || localInputs.type === 58) {
+      settings.enable_openclaw_obfuscation =
+        localInputs.enable_openclaw_obfuscation === true;
+      settings.enable_hermes_obfuscation =
+        localInputs.enable_hermes_obfuscation === true;
+    }
+
     settings.upstream_model_update_check_enabled =
       localInputs.upstream_model_update_check_enabled === true;
     settings.upstream_model_update_auto_sync_enabled =
@@ -1810,6 +1828,8 @@ const EditChannelModal = (props) => {
     delete localInputs.allow_include_obfuscation;
     delete localInputs.allow_inference_geo;
     delete localInputs.claude_beta_query;
+    delete localInputs.enable_openclaw_obfuscation;
+    delete localInputs.enable_hermes_obfuscation;
     delete localInputs.upstream_model_update_check_enabled;
     delete localInputs.upstream_model_update_auto_sync_enabled;
     delete localInputs.upstream_model_update_last_check_time;
@@ -3940,6 +3960,41 @@ const EditChannelModal = (props) => {
                           '开启后，该渠道请求 Claude 时将强制追加 ?beta=true（无需客户端手动传参）',
                         )}
                       />
+                    )}
+
+                    {(inputs.type === 14 || inputs.type === 58) && (
+                      <>
+                        <Form.Switch
+                          field='enable_openclaw_obfuscation'
+                          label={t('OpenClaw 指纹混淆')}
+                          checkedText={t('开')}
+                          uncheckedText={t('关')}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'enable_openclaw_obfuscation',
+                              value,
+                            )
+                          }
+                          extraText={t(
+                            '开启后，将混淆 OpenClaw 客户端特征（工具名、参数名、系统提示词中的 OpenClaw 标识等）',
+                          )}
+                        />
+                        <Form.Switch
+                          field='enable_hermes_obfuscation'
+                          label={t('Hermes 指纹混淆')}
+                          checkedText={t('开')}
+                          uncheckedText={t('关')}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'enable_hermes_obfuscation',
+                              value,
+                            )
+                          }
+                          extraText={t(
+                            '开启后，将混淆 Hermes Agent 客户端特征并修复空内容块导致的 400 错误',
+                          )}
+                        />
+                      </>
                     )}
 
                     {inputs.type === 1 && (
