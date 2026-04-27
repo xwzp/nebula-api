@@ -18,18 +18,34 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Collapse, Tag, Typography, Empty, Toast, Button, Tooltip } from '@douyinfe/semi-ui';
-import { IconCopy, IconDownload, IconChevronDown, IconChevronRight } from '@douyinfe/semi-icons';
+import {
+  Collapse,
+  Tag,
+  Typography,
+  Empty,
+  Toast,
+  Button,
+  Tooltip,
+} from '@douyinfe/semi-ui';
+import {
+  IconCopy,
+  IconDownload,
+  IconChevronDown,
+  IconChevronRight,
+} from '@douyinfe/semi-icons';
 import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
 function copyToClipboard(text, t) {
-  navigator.clipboard.writeText(text).then(() => {
-    Toast.success(t('已复制'));
-  }).catch(() => {
-    Toast.error(t('复制失败'));
-  });
+  navigator.clipboard
+    .writeText(text)
+    .then(() => {
+      Toast.success(t('已复制'));
+    })
+    .catch(() => {
+      Toast.error(t('复制失败'));
+    });
 }
 
 function HeadersTable({ headers }) {
@@ -130,13 +146,18 @@ function JsonKeySection({ keyName, value, t }) {
   const formatted = useMemo(() => JSON.stringify(value, null, 2), [value]);
 
   const copyText = useMemo(() => {
-    return JSON.stringify({ [keyName]: value }, null, 2).slice(1, -2).trim();
+    return JSON.stringify({ [keyName]: value }, null, 2)
+      .slice(1, -2)
+      .trim();
   }, [keyName, value]);
 
-  const handleCopy = useCallback((e) => {
-    e.stopPropagation();
-    copyToClipboard(copyText, t);
-  }, [copyText, t]);
+  const handleCopy = useCallback(
+    (e) => {
+      e.stopPropagation();
+      copyToClipboard(copyText, t);
+    },
+    [copyText, t],
+  );
 
   return (
     <div
@@ -162,15 +183,28 @@ function JsonKeySection({ keyName, value, t }) {
       >
         {isExpandable ? (
           expanded ? (
-            <IconChevronDown size='small' style={{ flexShrink: 0, color: 'var(--semi-color-text-2)' }} />
+            <IconChevronDown
+              size='small'
+              style={{ flexShrink: 0, color: 'var(--semi-color-text-2)' }}
+            />
           ) : (
-            <IconChevronRight size='small' style={{ flexShrink: 0, color: 'var(--semi-color-text-2)' }} />
+            <IconChevronRight
+              size='small'
+              style={{ flexShrink: 0, color: 'var(--semi-color-text-2)' }}
+            />
           )
         ) : (
           <span style={{ width: 16, flexShrink: 0 }} />
         )}
 
-        <Text strong style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--semi-color-primary)' }}>
+        <Text
+          strong
+          style={{
+            fontSize: 13,
+            fontFamily: 'monospace',
+            color: 'var(--semi-color-primary)',
+          }}
+        >
           {keyName}
         </Text>
 
@@ -236,6 +270,7 @@ function JsonKeySection({ keyName, value, t }) {
 
 function BodyDisplay({ body, bodyLen, truncated }) {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
 
   if (!body) {
     return <Text type='tertiary'>No body</Text>;
@@ -252,7 +287,12 @@ function BodyDisplay({ body, bodyLen, truncated }) {
   }
 
   // If JSON object, render collapsible key sections
-  if (isJson && typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+  if (
+    isJson &&
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    !Array.isArray(parsed)
+  ) {
     const keys = Object.keys(parsed);
     const fullFormatted = JSON.stringify(parsed, null, 2);
 
@@ -293,7 +333,6 @@ function BodyDisplay({ body, bodyLen, truncated }) {
     formatted = JSON.stringify(parsed, null, 2);
   }
 
-  const [expanded, setExpanded] = useState(false);
   const displayContent = expanded ? formatted : formatted.substring(0, 2000);
   const showExpandButton = formatted.length > 2000 && !expanded;
 
@@ -365,7 +404,13 @@ function StagePanel({ title, tag, captured }) {
       {captured.status_code > 0 && (
         <Tag
           size='small'
-          color={captured.status_code < 300 ? 'green' : captured.status_code < 500 ? 'orange' : 'red'}
+          color={
+            captured.status_code < 300
+              ? 'green'
+              : captured.status_code < 500
+                ? 'orange'
+                : 'red'
+          }
         >
           {captured.status_code}
         </Tag>
@@ -395,14 +440,20 @@ function StagePanel({ title, tag, captured }) {
       )}
 
       <div style={{ marginBottom: 12 }}>
-        <Text strong style={{ fontSize: 13, marginBottom: 4, display: 'block' }}>
+        <Text
+          strong
+          style={{ fontSize: 13, marginBottom: 4, display: 'block' }}
+        >
           Headers
         </Text>
         <HeadersTable headers={captured.headers} />
       </div>
 
       <div>
-        <Text strong style={{ fontSize: 13, marginBottom: 4, display: 'block' }}>
+        <Text
+          strong
+          style={{ fontSize: 13, marginBottom: 4, display: 'block' }}
+        >
           Body
         </Text>
         <BodyDisplay
@@ -453,7 +504,10 @@ function downloadTraceAsJson(trace, t) {
   const a = document.createElement('a');
   a.href = url;
   const ts = trace.timestamp
-    ? new Date(trace.timestamp).toISOString().replace(/[:.]/g, '-').substring(0, 19)
+    ? new Date(trace.timestamp)
+        .toISOString()
+        .replace(/[:.]/g, '-')
+        .substring(0, 19)
     : 'unknown';
   a.download = `trace_${trace.model_name || 'unknown'}_${ts}.json`;
   document.body.appendChild(a);
@@ -517,13 +571,13 @@ export default function RequestDetail({ trace }) {
         <Tag color='grey'>user:{trace.user_id}</Tag>
         {trace.is_stream && (
           <Tag color='cyan'>
-            SSE {trace.stream_event_count > 0 ? `(${trace.stream_event_count} events)` : ''}
+            SSE{' '}
+            {trace.stream_event_count > 0
+              ? `(${trace.stream_event_count} events)`
+              : ''}
           </Tag>
         )}
-        <Text
-          copyable
-          style={{ fontSize: 12, fontFamily: 'monospace' }}
-        >
+        <Text copyable style={{ fontSize: 12, fontFamily: 'monospace' }}>
           {trace.trace_id}
         </Text>
         <Button
