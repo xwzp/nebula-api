@@ -366,6 +366,18 @@ const renderOperations = (
       name: 'OpenClaw (fish)',
       onClick: () => onConfigureProvider(record, 'openclaw', 'fish'),
     },
+    {
+      node: 'item',
+      key: 'hermes-bash',
+      name: 'Hermes (Bash)',
+      onClick: () => onConfigureProvider(record, 'hermes', 'bash'),
+    },
+    {
+      node: 'item',
+      key: 'hermes-fish',
+      name: 'Hermes (fish)',
+      onClick: () => onConfigureProvider(record, 'hermes', 'fish'),
+    },
   ];
 
   return (
