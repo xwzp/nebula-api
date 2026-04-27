@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -12,18 +13,34 @@ import (
 )
 
 type TopUp struct {
-	Id            int     `json:"id"`
-	UserId        int     `json:"user_id" gorm:"index"`
-	Amount        int64   `json:"amount"`
-	Money         float64 `json:"money"`
-	TradeNo       string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
-	PaymentMethod string  `json:"payment_method" gorm:"type:varchar(50)"`
-	CreateTime    int64   `json:"create_time"`
-	CompleteTime  int64   `json:"complete_time"`
-	Status        string  `json:"status"`
-	CodeUrl       string  `json:"code_url,omitempty" gorm:"type:varchar(512)"`
-	Username      string  `json:"username,omitempty" gorm:"-"`
+	Id              int     `json:"id"`
+	UserId          int     `json:"user_id" gorm:"index"`
+	Amount          int64   `json:"amount"`
+	Money           float64 `json:"money"`
+	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
+	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
+	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
+	CreateTime      int64   `json:"create_time"`
+	CompleteTime    int64   `json:"complete_time"`
+	Status          string  `json:"status"`
+	CodeUrl         string  `json:"code_url,omitempty" gorm:"type:varchar(512)"`
+	Username        string  `json:"username,omitempty" gorm:"-"`
 }
+
+const (
+	PaymentProviderEpay   = "epay"
+	PaymentProviderStripe = "stripe"
+	PaymentProviderCreem  = "creem"
+	PaymentProviderWaffo  = "waffo"
+	PaymentProviderWechat = "wechat"
+	PaymentProviderAlipay = "alipay"
+)
+
+var (
+	ErrPaymentProviderMismatch = errors.New("payment provider mismatch")
+	ErrTopUpNotFound           = errors.New("topup not found")
+	ErrTopUpStatusInvalid      = errors.New("topup status invalid")
+)
 
 func (topUp *TopUp) Insert() error {
 	var err error
@@ -66,6 +83,71 @@ func GetTopUpByTradeNo(tradeNo string) *TopUp {
 	return topUp
 }
 
+func IsTopUpPaymentProvider(topUp *TopUp, expectedPaymentProvider string) bool {
+	return topUpPaymentProviderMatches(topUp, expectedPaymentProvider)
+}
+
+func topUpPaymentProviderMatches(topUp *TopUp, expectedPaymentProvider string) bool {
+	if expectedPaymentProvider == "" {
+		return true
+	}
+	if topUp == nil {
+		return false
+	}
+	if topUp.PaymentProvider == expectedPaymentProvider {
+		return true
+	}
+	if topUp.PaymentProvider != "" {
+		return false
+	}
+
+	// Legacy pending orders created before payment_provider existed are allowed
+	// only when their old payment_method and order prefix identify the same gateway.
+	switch expectedPaymentProvider {
+	case PaymentProviderStripe:
+		return topUp.PaymentMethod == "stripe" && strings.HasPrefix(topUp.TradeNo, "ref_")
+	case PaymentProviderCreem:
+		return (topUp.PaymentMethod == "creem" || topUp.PaymentMethod == "") && strings.HasPrefix(topUp.TradeNo, "ref_")
+	case PaymentProviderWaffo:
+		return topUp.PaymentMethod == "waffo" && strings.HasPrefix(topUp.TradeNo, "WAFFO-")
+	case PaymentProviderWechat:
+		return topUp.PaymentMethod == "wechat" && strings.HasPrefix(topUp.TradeNo, "WXPAY-")
+	case PaymentProviderAlipay:
+		return topUp.PaymentMethod == "alipay" && strings.HasPrefix(topUp.TradeNo, "ALIPAY-")
+	case PaymentProviderEpay:
+		return strings.HasPrefix(topUp.TradeNo, "USR")
+	default:
+		return false
+	}
+}
+
+func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, targetStatus string) error {
+	if tradeNo == "" {
+		return errors.New("未提供支付单号")
+	}
+
+	refCol := "`trade_no`"
+	if common.UsingPostgreSQL {
+		refCol = `"trade_no"`
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		topUp := &TopUp{}
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
+			return ErrTopUpNotFound
+		}
+		if !topUpPaymentProviderMatches(topUp, expectedPaymentProvider) {
+			return ErrPaymentProviderMismatch
+		}
+		if topUp.Status != common.TopUpStatusPending {
+			return ErrTopUpStatusInvalid
+		}
+
+		topUp.Status = targetStatus
+		return tx.Save(topUp).Error
+	})
+}
+
 func Recharge(referenceId string, customerId string) (err error) {
 	if referenceId == "" {
 		return errors.New("未提供支付单号")
@@ -83,6 +165,10 @@ func Recharge(referenceId string, customerId string) (err error) {
 		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", referenceId).First(topUp).Error
 		if err != nil {
 			return errors.New("充值订单不存在")
+		}
+
+		if !topUpPaymentProviderMatches(topUp, PaymentProviderStripe) {
+			return ErrPaymentProviderMismatch
 		}
 
 		if topUp.Status != common.TopUpStatusPending {
@@ -336,6 +422,10 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 			return errors.New("充值订单不存在")
 		}
 
+		if !topUpPaymentProviderMatches(topUp, PaymentProviderCreem) {
+			return ErrPaymentProviderMismatch
+		}
+
 		if topUp.Status != common.TopUpStatusPending {
 			return errors.New("充值订单状态错误")
 		}
@@ -475,6 +565,10 @@ func RechargeWechat(tradeNo string) (err error) {
 			return nil // 幂等：已成功直接返回
 		}
 
+		if !topUpPaymentProviderMatches(topUp, PaymentProviderWechat) {
+			return ErrPaymentProviderMismatch
+		}
+
 		if topUp.Status != common.TopUpStatusPending {
 			return errors.New("充值订单状态错误")
 		}
@@ -534,6 +628,10 @@ func RechargeAlipay(tradeNo string) (err error) {
 			return nil // 幂等：已成功直接返回
 		}
 
+		if !topUpPaymentProviderMatches(topUp, PaymentProviderAlipay) {
+			return ErrPaymentProviderMismatch
+		}
+
 		if topUp.Status != common.TopUpStatusPending {
 			return errors.New("充值订单状态错误")
 		}
@@ -591,6 +689,10 @@ func RechargeWaffo(tradeNo string) (err error) {
 
 		if topUp.Status == common.TopUpStatusSuccess {
 			return nil // 幂等：已成功直接返回
+		}
+
+		if !topUpPaymentProviderMatches(topUp, PaymentProviderWaffo) {
+			return ErrPaymentProviderMismatch
 		}
 
 		if topUp.Status != common.TopUpStatusPending {

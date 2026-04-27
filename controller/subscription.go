@@ -26,7 +26,7 @@ type SubscriptionPayRequest struct {
 
 // validateAndCreateSubscriptionOrder validates the plan + period, checks purchase limits,
 // and creates a pending SubscriptionOrder. Returns the plan, order, and true on success.
-func validateAndCreateSubscriptionOrder(c *gin.Context, tradePrefix string, paymentMethod string) (*model.SubscriptionPlan, *model.SubscriptionOrder, bool) {
+func validateAndCreateSubscriptionOrder(c *gin.Context, tradePrefix string, paymentMethod string, paymentProvider string) (*model.SubscriptionPlan, *model.SubscriptionOrder, bool) {
 	var req SubscriptionPayRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.PlanId <= 0 {
 		common.ApiErrorMsg(c, "参数错误")
@@ -73,14 +73,15 @@ func validateAndCreateSubscriptionOrder(c *gin.Context, tradePrefix string, paym
 	tradeNo := fmt.Sprintf("%s-%d-%d-%s", tradePrefix, userId, time.Now().UnixMilli(), randstr.String(6))
 
 	order := &model.SubscriptionOrder{
-		UserId:        userId,
-		PlanId:        plan.Id,
-		PeriodType:    req.PeriodType,
-		Money:         price,
-		TradeNo:       tradeNo,
-		PaymentMethod: paymentMethod,
-		CreateTime:    time.Now().Unix(),
-		Status:        common.TopUpStatusPending,
+		UserId:          userId,
+		PlanId:          plan.Id,
+		PeriodType:      req.PeriodType,
+		Money:           price,
+		TradeNo:         tradeNo,
+		PaymentMethod:   paymentMethod,
+		PaymentProvider: paymentProvider,
+		CreateTime:      time.Now().Unix(),
+		Status:          common.TopUpStatusPending,
 	}
 	if err := order.Insert(); err != nil {
 		common.ApiErrorMsg(c, "创建订单失败")
@@ -107,7 +108,7 @@ type PublicSubscriptionPlanDTO struct {
 	Features     string                     `json:"features"`
 	PriceMonthly float64                    `json:"price_monthly"`
 	Currency     string                     `json:"currency"`
-	Periods      map[string]PublicPeriodDTO  `json:"periods"`
+	Periods      map[string]PublicPeriodDTO `json:"periods"`
 	TotalAmount  int64                      `json:"total_amount"`
 	UpgradeGroup string                     `json:"upgrade_group"`
 }
@@ -351,34 +352,34 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 	}
 
 	updateMap := map[string]interface{}{
-		"title":                        plan.Title,
-		"subtitle":                     plan.Subtitle,
-		"tag":                          plan.Tag,
-		"features":                     plan.Features,
-		"price_monthly":                plan.PriceMonthly,
-		"currency":                     plan.Currency,
-		"monthly_enabled":              plan.MonthlyEnabled,
-		"monthly_features":             plan.MonthlyFeatures,
-		"monthly_stripe_price_id":      plan.MonthlyStripePriceId,
-		"monthly_creem_product_id":     plan.MonthlyCreemProductId,
-		"quarterly_enabled":            plan.QuarterlyEnabled,
-		"quarterly_discount":           plan.QuarterlyDiscount,
-		"quarterly_features":           plan.QuarterlyFeatures,
-		"quarterly_stripe_price_id":    plan.QuarterlyStripePriceId,
-		"quarterly_creem_product_id":   plan.QuarterlyCreemProductId,
-		"yearly_enabled":               plan.YearlyEnabled,
-		"yearly_discount":              plan.YearlyDiscount,
-		"yearly_features":              plan.YearlyFeatures,
-		"yearly_stripe_price_id":       plan.YearlyStripePriceId,
-		"yearly_creem_product_id":      plan.YearlyCreemProductId,
-		"total_amount":                 plan.TotalAmount,
-		"quota_reset_period":           plan.QuotaResetPeriod,
-		"quota_reset_custom_seconds":   plan.QuotaResetCustomSeconds,
-		"upgrade_group":                plan.UpgradeGroup,
-		"max_purchase_per_user":        plan.MaxPurchasePerUser,
-		"sort_order":                   plan.SortOrder,
-		"enabled":                      plan.Enabled,
-		"updated_at":                   common.GetTimestamp(),
+		"title":                      plan.Title,
+		"subtitle":                   plan.Subtitle,
+		"tag":                        plan.Tag,
+		"features":                   plan.Features,
+		"price_monthly":              plan.PriceMonthly,
+		"currency":                   plan.Currency,
+		"monthly_enabled":            plan.MonthlyEnabled,
+		"monthly_features":           plan.MonthlyFeatures,
+		"monthly_stripe_price_id":    plan.MonthlyStripePriceId,
+		"monthly_creem_product_id":   plan.MonthlyCreemProductId,
+		"quarterly_enabled":          plan.QuarterlyEnabled,
+		"quarterly_discount":         plan.QuarterlyDiscount,
+		"quarterly_features":         plan.QuarterlyFeatures,
+		"quarterly_stripe_price_id":  plan.QuarterlyStripePriceId,
+		"quarterly_creem_product_id": plan.QuarterlyCreemProductId,
+		"yearly_enabled":             plan.YearlyEnabled,
+		"yearly_discount":            plan.YearlyDiscount,
+		"yearly_features":            plan.YearlyFeatures,
+		"yearly_stripe_price_id":     plan.YearlyStripePriceId,
+		"yearly_creem_product_id":    plan.YearlyCreemProductId,
+		"total_amount":               plan.TotalAmount,
+		"quota_reset_period":         plan.QuotaResetPeriod,
+		"quota_reset_custom_seconds": plan.QuotaResetCustomSeconds,
+		"upgrade_group":              plan.UpgradeGroup,
+		"max_purchase_per_user":      plan.MaxPurchasePerUser,
+		"sort_order":                 plan.SortOrder,
+		"enabled":                    plan.Enabled,
+		"updated_at":                 common.GetTimestamp(),
 	}
 	if err := model.UpdateSubscriptionPlan(id, updateMap); err != nil {
 		common.ApiError(c, err)

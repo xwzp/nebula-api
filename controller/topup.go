@@ -152,28 +152,28 @@ func GetTopUpInfo(c *gin.Context) {
 	}
 
 	data := gin.H{
-		"enable_online_topup":  enableOnlineTopUp,
-		"enable_stripe_topup":  setting.StripeApiSecret != "" && setting.StripeWebhookSecret != "" && setting.StripePriceId != "",
-		"enable_creem_topup":   setting.CreemApiKey != "" && setting.CreemProducts != "[]",
-		"enable_waffo_topup":   enableWaffo,
-		"enable_wechat_topup":  enableWechatPay,
-		"wechat_min_topup":     effectiveWechatMinTopUp,
-		"wechat_unit_price":    setting.WechatPayUnitPrice,
-		"enable_alipay_topup":  enableAlipay,
-		"alipay_min_topup":     effectiveAlipayMinTopUp,
-		"alipay_unit_price":    setting.AlipayUnitPrice,
+		"enable_online_topup": enableOnlineTopUp,
+		"enable_stripe_topup": setting.StripeApiSecret != "" && setting.StripeWebhookSecret != "" && setting.StripePriceId != "",
+		"enable_creem_topup":  setting.CreemApiKey != "" && setting.CreemProducts != "[]",
+		"enable_waffo_topup":  enableWaffo,
+		"enable_wechat_topup": enableWechatPay,
+		"wechat_min_topup":    effectiveWechatMinTopUp,
+		"wechat_unit_price":   setting.WechatPayUnitPrice,
+		"enable_alipay_topup": enableAlipay,
+		"alipay_min_topup":    effectiveAlipayMinTopUp,
+		"alipay_unit_price":   setting.AlipayUnitPrice,
 		"waffo_pay_methods": func() interface{} {
 			if enableWaffo {
 				return setting.GetWaffoPayMethods()
 			}
 			return nil
 		}(),
-		"creem_products": setting.CreemProducts,
-		"pay_methods":         payMethods,
-		"min_topup":           operation_setting.MinTopUp,
-		"stripe_min_topup":    setting.StripeMinTopUp,
-		"waffo_min_topup":     setting.WaffoMinTopUp,
-		"topup_group_ratio":   topupGroupRatio,
+		"creem_products":    setting.CreemProducts,
+		"pay_methods":       payMethods,
+		"min_topup":         operation_setting.MinTopUp,
+		"stripe_min_topup":  setting.StripeMinTopUp,
+		"waffo_min_topup":   setting.WaffoMinTopUp,
+		"topup_group_ratio": topupGroupRatio,
 	}
 	common.ApiSuccess(c, data)
 }
@@ -309,13 +309,14 @@ func RequestEpay(c *gin.Context) {
 		amount = dAmount.Div(dQuotaPerUnit).IntPart()
 	}
 	topUp := &model.TopUp{
-		UserId:        id,
-		Amount:        amount,
-		Money:         payMoney,
-		TradeNo:       tradeNo,
-		PaymentMethod: req.PaymentMethod,
-		CreateTime:    time.Now().Unix(),
-		Status:        "pending",
+		UserId:          id,
+		Amount:          amount,
+		Money:           payMoney,
+		TradeNo:         tradeNo,
+		PaymentMethod:   req.PaymentMethod,
+		PaymentProvider: model.PaymentProviderEpay,
+		CreateTime:      time.Now().Unix(),
+		Status:          "pending",
 	}
 	err = topUp.Insert()
 	if err != nil {
@@ -427,7 +428,15 @@ func EpayNotify(c *gin.Context) {
 			log.Printf("易支付回调未找到订单: %v", verifyInfo)
 			return
 		}
+		if !model.IsTopUpPaymentProvider(topUp, model.PaymentProviderEpay) {
+			log.Printf("易支付回调订单支付网关不匹配: 订单: %s, order_provider: %s, callback_type: %s", verifyInfo.ServiceTradeNo, topUp.PaymentProvider, verifyInfo.Type)
+			return
+		}
 		if topUp.Status == "pending" {
+			if topUp.PaymentMethod != verifyInfo.Type {
+				log.Printf("易支付实际支付方式与订单不同，更新记录: 订单: %s, order_payment_method: %s, actual_type: %s", verifyInfo.ServiceTradeNo, topUp.PaymentMethod, verifyInfo.Type)
+				topUp.PaymentMethod = verifyInfo.Type
+			}
 			topUp.Status = "success"
 			err := topUp.Update()
 			if err != nil {
@@ -552,4 +561,3 @@ func AdminCompleteTopUp(c *gin.Context) {
 	}
 	common.ApiSuccess(c, nil)
 }
-

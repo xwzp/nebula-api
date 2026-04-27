@@ -104,13 +104,14 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 	}
 
 	topUp := &model.TopUp{
-		UserId:        id,
-		Amount:        req.Amount,
-		Money:         payMoney,
-		TradeNo:       referenceId,
-		PaymentMethod: PaymentMethodStripe,
-		CreateTime:    time.Now().Unix(),
-		Status:        common.TopUpStatusPending,
+		UserId:          id,
+		Amount:          req.Amount,
+		Money:           payMoney,
+		TradeNo:         referenceId,
+		PaymentMethod:   PaymentMethodStripe,
+		PaymentProvider: model.PaymentProviderStripe,
+		CreateTime:      time.Now().Unix(),
+		Status:          common.TopUpStatusPending,
 	}
 	err = topUp.Insert()
 	if err != nil {
@@ -155,6 +156,11 @@ func StripeWebhook(c *gin.Context) {
 
 	signature := c.GetHeader("Stripe-Signature")
 	endpointSecret := setting.StripeWebhookSecret
+	if strings.TrimSpace(endpointSecret) == "" {
+		log.Printf("Stripe Webhook未配置签名密钥")
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
 	event, err := webhook.ConstructEventWithOptions(payload, signature, endpointSecret, webhook.ConstructEventOptions{
 		IgnoreAPIVersionMismatch: true,
 	})
@@ -195,7 +201,7 @@ func sessionCompleted(event stripe.Event) {
 		"currency":     strings.ToUpper(event.GetObjectValue("currency")),
 		"event_type":   string(event.Type),
 	}
-	if err := model.CompleteSubscriptionOrder(referenceId, common.GetJsonString(payload)); err == nil {
+	if err := model.CompleteSubscriptionOrder(referenceId, common.GetJsonString(payload), model.PaymentProviderStripe, ""); err == nil {
 		return
 	} else if err != nil && !errors.Is(err, model.ErrSubscriptionOrderNotFound) {
 		log.Println("complete subscription order failed:", err.Error(), referenceId)
@@ -229,25 +235,18 @@ func sessionExpired(event stripe.Event) {
 	// Subscription order expiration
 	LockOrder(referenceId)
 	defer UnlockOrder(referenceId)
-	if err := model.ExpireSubscriptionOrder(referenceId); err == nil {
+	if err := model.ExpireSubscriptionOrder(referenceId, model.PaymentProviderStripe); err == nil {
 		return
 	} else if err != nil && !errors.Is(err, model.ErrSubscriptionOrderNotFound) {
 		log.Println("过期订阅订单失败", referenceId, ", err:", err.Error())
 		return
 	}
 
-	topUp := model.GetTopUpByTradeNo(referenceId)
-	if topUp == nil {
-		log.Println("充值订单不存在", referenceId)
+	err := model.UpdatePendingTopUpStatus(referenceId, model.PaymentProviderStripe, common.TopUpStatusExpired)
+	if errors.Is(err, model.ErrTopUpNotFound) {
+		log.Println("充值订单不存在，无法标记过期", referenceId)
 		return
 	}
-
-	if topUp.Status != common.TopUpStatusPending {
-		log.Println("充值订单状态错误", referenceId)
-	}
-
-	topUp.Status = common.TopUpStatusExpired
-	err := topUp.Update()
 	if err != nil {
 		log.Println("过期充值订单失败", referenceId, ", err:", err.Error())
 		return

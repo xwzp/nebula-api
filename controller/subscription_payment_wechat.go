@@ -25,7 +25,7 @@ func SubscriptionRequestWechatPay(c *gin.Context) {
 		return
 	}
 
-	plan, order, ok := validateAndCreateSubscriptionOrder(c, "SUBWX", PaymentMethodWechat)
+	plan, order, ok := validateAndCreateSubscriptionOrder(c, "SUBWX", PaymentMethodWechat, model.PaymentProviderWechat)
 	if !ok {
 		return
 	}
@@ -34,7 +34,7 @@ func SubscriptionRequestWechatPay(c *gin.Context) {
 	client, err := getWechatPayClient(ctx)
 	if err != nil {
 		log.Printf("订阅微信支付客户端初始化失败: %v", err)
-		_ = model.ExpireSubscriptionOrder(order.TradeNo)
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderWechat)
 		common.ApiErrorMsg(c, "支付配置错误")
 		return
 	}
@@ -44,7 +44,7 @@ func SubscriptionRequestWechatPay(c *gin.Context) {
 
 	totalFen := int64(order.Money * 100)
 	if totalFen <= 0 {
-		_ = model.ExpireSubscriptionOrder(order.TradeNo)
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderWechat)
 		common.ApiErrorMsg(c, "支付金额过低")
 		return
 	}
@@ -66,14 +66,14 @@ func SubscriptionRequestWechatPay(c *gin.Context) {
 	})
 	if err != nil {
 		log.Printf("订阅微信支付预下单失败: %v, 订单: %s", err, order.TradeNo)
-		_ = model.ExpireSubscriptionOrder(order.TradeNo)
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderWechat)
 		common.ApiErrorMsg(c, "拉起支付失败")
 		return
 	}
 
 	if resp.CodeUrl == nil || *resp.CodeUrl == "" {
 		log.Printf("订阅微信支付预下单返回空 code_url, 订单: %s", order.TradeNo)
-		_ = model.ExpireSubscriptionOrder(order.TradeNo)
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderWechat)
 		common.ApiErrorMsg(c, "拉起支付失败")
 		return
 	}
@@ -136,7 +136,7 @@ func SubscriptionWechatNotify(c *gin.Context) {
 	LockOrder(outTradeNo)
 	defer UnlockOrder(outTradeNo)
 
-	if err := model.CompleteSubscriptionOrder(outTradeNo, common.GetJsonString(transaction)); err != nil {
+	if err := model.CompleteSubscriptionOrder(outTradeNo, common.GetJsonString(transaction), model.PaymentProviderWechat, ""); err != nil {
 		log.Printf("订阅微信支付回调：处理失败: %v, 订单: %s", err, outTradeNo)
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "FAIL", "message": err.Error()})
 		return

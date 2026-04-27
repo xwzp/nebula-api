@@ -19,7 +19,7 @@ func SubscriptionRequestAlipayPay(c *gin.Context) {
 		return
 	}
 
-	plan, order, ok := validateAndCreateSubscriptionOrder(c, "SUBAL", PaymentMethodAlipay)
+	plan, order, ok := validateAndCreateSubscriptionOrder(c, "SUBAL", PaymentMethodAlipay, model.PaymentProviderAlipay)
 	if !ok {
 		return
 	}
@@ -27,7 +27,7 @@ func SubscriptionRequestAlipayPay(c *gin.Context) {
 	client, err := getAlipayClient()
 	if err != nil {
 		log.Printf("订阅支付宝客户端初始化失败: %v", err)
-		_ = model.ExpireSubscriptionOrder(order.TradeNo)
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderAlipay)
 		common.ApiErrorMsg(c, "支付配置错误")
 		return
 	}
@@ -46,14 +46,14 @@ func SubscriptionRequestAlipayPay(c *gin.Context) {
 	resp, err := client.TradePreCreate(c.Request.Context(), p)
 	if err != nil {
 		log.Printf("订阅支付宝预创建失败: %v, 订单: %s", err, order.TradeNo)
-		_ = model.ExpireSubscriptionOrder(order.TradeNo)
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderAlipay)
 		common.ApiErrorMsg(c, "拉起支付失败")
 		return
 	}
 
 	if resp.QRCode == "" {
 		log.Printf("订阅支付宝预创建返回空 qr_code, 订单: %s, resp: %+v", order.TradeNo, resp)
-		_ = model.ExpireSubscriptionOrder(order.TradeNo)
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderAlipay)
 		common.ApiErrorMsg(c, "拉起支付失败")
 		return
 	}
@@ -106,7 +106,7 @@ func SubscriptionAlipayNotify(c *gin.Context) {
 	LockOrder(outTradeNo)
 	defer UnlockOrder(outTradeNo)
 
-	if err := model.CompleteSubscriptionOrder(outTradeNo, common.GetJsonString(notification)); err != nil {
+	if err := model.CompleteSubscriptionOrder(outTradeNo, common.GetJsonString(notification), model.PaymentProviderAlipay, ""); err != nil {
 		log.Printf("订阅支付宝回调：处理失败: %v, 订单: %s", err, outTradeNo)
 		c.String(http.StatusInternalServerError, "fail")
 		return

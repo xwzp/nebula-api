@@ -90,14 +90,15 @@ func SubscriptionRequestCreemPay(c *gin.Context) {
 	referenceId := "sub_ref_" + common.Sha1([]byte(reference+time.Now().String()+user.Username))
 
 	order := &model.SubscriptionOrder{
-		UserId:        userId,
-		PlanId:        plan.Id,
-		PeriodType:    req.PeriodType,
-		Money:         price,
-		TradeNo:       referenceId,
-		PaymentMethod: PaymentMethodCreem,
-		CreateTime:    time.Now().Unix(),
-		Status:        common.TopUpStatusPending,
+		UserId:          userId,
+		PlanId:          plan.Id,
+		PeriodType:      req.PeriodType,
+		Money:           price,
+		TradeNo:         referenceId,
+		PaymentMethod:   PaymentMethodCreem,
+		PaymentProvider: model.PaymentProviderCreem,
+		CreateTime:      time.Now().Unix(),
+		Status:          common.TopUpStatusPending,
 	}
 	if err := order.Insert(); err != nil {
 		c.JSON(200, gin.H{"message": "error", "data": "创建订单失败"})

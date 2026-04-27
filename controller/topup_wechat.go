@@ -166,13 +166,14 @@ func RequestWechatPay(c *gin.Context) {
 
 	// 创建本地订单
 	topUp := &model.TopUp{
-		UserId:        id,
-		Amount:        amount,
-		Money:         payMoney,
-		TradeNo:       tradeNo,
-		PaymentMethod: PaymentMethodWechat,
-		CreateTime:    time.Now().Unix(),
-		Status:        common.TopUpStatusPending,
+		UserId:          id,
+		Amount:          amount,
+		Money:           payMoney,
+		TradeNo:         tradeNo,
+		PaymentMethod:   PaymentMethodWechat,
+		PaymentProvider: model.PaymentProviderWechat,
+		CreateTime:      time.Now().Unix(),
+		Status:          common.TopUpStatusPending,
 	}
 	if err := topUp.Insert(); err != nil {
 		log.Printf("微信支付创建本地订单失败: %v", err)
