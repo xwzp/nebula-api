@@ -205,11 +205,12 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     return "'" + String(value).replace(/'/g, "'\\''") + "'";
   };
 
-  const buildPythonStdinCommand = (pythonScript, payload, marker, shell) => {
-    if (shell === 'fish') {
-      return `printf '%s\\n' ${shellSingleQuote(payload)} | python3 -c ${shellSingleQuote(pythonScript)}`;
-    }
-    return `python3 -c ${shellSingleQuote(pythonScript)} << '${marker}'\n${payload}\n${marker}`;
+  const buildPythonConfigCommand = (pythonScript, payload) => {
+    const scriptBase64 = encodeToBase64(pythonScript);
+    const payloadBase64 = encodeToBase64(payload);
+    const runner = `import base64; exec(base64.b64decode("${scriptBase64}").decode("utf-8"))`;
+
+    return `env NEBULA_PROVIDER_JSON=${shellSingleQuote(payloadBase64)} python3 -c ${shellSingleQuote(runner)}`;
   };
 
   const buildAsciiSlug = (value, fallback) => {
@@ -223,7 +224,7 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     return slug || fallback;
   };
 
-  const buildOpenClawCommand = (record, fullKey, models, shell) => {
+  const buildOpenClawCommand = (record, fullKey, models) => {
     const serverAddress = getServerAddress();
     const providerKey =
       'nebula-' + (record.name || 'default').replace(/\s+/g, '-');
@@ -235,9 +236,9 @@ export const useTokensData = (openFluentNotification, openCCSwitchModal) => {
     };
     const providerJson = JSON.stringify(providerConfig, null, 2);
 
-    const pythonScript = `import json, os, sys
+    const pythonScript = `import base64, json, os
 
-provider = json.loads(sys.stdin.read())
+provider = json.loads(base64.b64decode(os.environ["NEBULA_PROVIDER_JSON"]).decode("utf-8"))
 path = os.path.expanduser("~/.openclaw/openclaw.json")
 try:
     with open(path) as f:
@@ -263,15 +264,10 @@ with open(path, "w") as f:
 
 print("Done! Nebula provider configured at " + path)`;
 
-    return buildPythonStdinCommand(
-      pythonScript,
-      providerJson,
-      'OPENCLAW_JSON',
-      shell,
-    );
+    return buildPythonConfigCommand(pythonScript, providerJson);
   };
 
-  const buildHermesCommand = (record, fullKey, models, shell) => {
+  const buildHermesCommand = (record, fullKey, models) => {
     const serverAddress = getServerAddress();
     const providerName =
       'nebula-' +
@@ -301,10 +297,10 @@ print("Done! Nebula provider configured at " + path)`;
     };
     const providerJson = JSON.stringify(providerConfig, null, 2);
 
-    const pythonScript = `import json, os, re, sys
+    const pythonScript = `import base64, json, os, re
 from pathlib import Path
 
-provider = json.loads(sys.stdin.read())
+provider = json.loads(base64.b64decode(os.environ["NEBULA_PROVIDER_JSON"]).decode("utf-8"))
 home = os.environ.get("HERMES_HOME", "").strip()
 path = (Path(home).expanduser() if home else Path.home() / ".hermes") / "config.yaml"
 
@@ -423,16 +419,11 @@ path.parent.mkdir(parents=True, exist_ok=True)
 path.write_text(new_text)
 print("Done! Nebula provider configured at " + str(path))`;
 
-    return buildPythonStdinCommand(
-      pythonScript,
-      providerJson,
-      'HERMES_JSON',
-      shell,
-    );
+    return buildPythonConfigCommand(pythonScript, providerJson);
   };
 
-  // Generate provider config and copy shell command to clipboard
-  // shell: 'bash' | 'fish'
+  // Generate provider config and copy a bash/zsh/fish-compatible command.
+  // shell is kept for the existing menu contract.
   const onConfigureProvider = async (record, provider, shell = 'bash') => {
     if (provider !== 'openclaw' && provider !== 'hermes') return;
     try {
